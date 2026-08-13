@@ -1,4 +1,5 @@
 import type { ProviderName } from "../providers/types.js";
+import type { ResolvedContext } from "./contextResolver.js";
 
 /** FASE 6 skill catalog. */
 export type SkillCategory =
@@ -74,6 +75,7 @@ export interface OrchestrationRequest {
 
 export interface OrchestrationResult {
   classification: ClassificationResult;
+  context: ResolvedContext;
   routing: RoutingDecision;
   plan: TaskPlan;
   executionMode: ExecutionMode;
