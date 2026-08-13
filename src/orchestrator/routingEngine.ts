@@ -69,7 +69,7 @@ export function routeTask(classification: ClassificationResult): RoutingDecision
     };
   }
 
-  if (requiresInvestigation && skills.includes("business-analysis")) {
+  if (requiresInvestigation && (skills.includes("business-analysis") || skills.includes("financial-analysis"))) {
     return {
       primary: "manus",
       reviewer: "openai",
