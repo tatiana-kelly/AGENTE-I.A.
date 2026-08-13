@@ -1,0 +1,21 @@
+{
+  "name": "agente-ia-orchestrator",
+  "version": "0.1.0",
+  "description": "SAL AI OS — AI Orchestrator / Multi-Model Router (PRP-003)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.10"
+  }
+}
