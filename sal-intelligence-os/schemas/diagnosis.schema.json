@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SAL Diagnosis",
+  "type": "object",
+  "required": [
+    "facts",
+    "hypotheses",
+    "probable_cause",
+    "confidence",
+    "recommendations",
+    "owner",
+    "success_kpi"
+  ],
+  "properties": {
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "calculations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "hypotheses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object"
+      }
+    },
+    "probable_cause": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "missing_data": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object"
+      }
+    },
+    "owner": {
+      "type": "string"
+    },
+    "deadline": {
+      "type": "string"
+    },
+    "success_kpi": {
+      "type": "string"
+    },
+    "success_target": {
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "decision_status": {
+      "enum": [
+        "NEEDS_INVESTIGATION",
+        "READY_FOR_DECISION",
+        "CONTAINMENT_ONLY",
+        "HUMAN_APPROVAL_REQUIRED"
+      ]
+    }
+  }
+}

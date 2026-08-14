@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SAL Alert",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "period",
+    "materiality",
+    "severity",
+    "deviation",
+    "concentration",
+    "recommended_action"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "period": {
+      "type": "string"
+    },
+    "materiality": {
+      "type": "number"
+    },
+    "severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "deviation": {
+      "type": "object",
+      "required": [
+        "absolute",
+        "percentage"
+      ],
+      "properties": {
+        "absolute": {
+          "type": "number"
+        },
+        "percentage": {
+          "type": "number"
+        }
+      }
+    },
+    "concentration": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "probable_cause": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "missing_data": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "consequence_no_action": {
+      "type": "string"
+    },
+    "recommended_action": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Segredos — nunca commitar
+.env
+*.env.local
+
+# Dados locais gerados em dev/teste
+backend/*.db
+backend/audit_trail.jsonl
+
+# Editores/SO
+.DS_Store
+Thumbs.db

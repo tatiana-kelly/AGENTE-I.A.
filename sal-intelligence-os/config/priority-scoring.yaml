@@ -1,0 +1,50 @@
+version: 1
+principle: "maior resultado com menor esforço"
+
+dimensions:
+  financial_impact:
+    weight: 0.26
+    scale: 0-100
+  operational_impact:
+    weight: 0.12
+    scale: 0-100
+  risk_impact:
+    weight: 0.14
+    scale: 0-100
+  urgency:
+    weight: 0.10
+    scale: 0-100
+  causal_confidence:
+    weight: 0.12
+    scale: 0-100
+  reversibility:
+    weight: 0.06
+    scale: 0-100
+  ease:
+    weight: 0.12
+    scale: 0-100
+  time_to_value:
+    weight: 0.08
+    scale: 0-100
+
+gates:
+  minimum_data_quality: 60
+  minimum_confidence_ready_for_decision: 70
+  human_approval_required_if:
+    - disciplinary_people_action
+    - legal_final_interpretation
+    - material_tax_or_accounting_change
+    - fraud_allegation
+    - material_contract_or_payment
+    - irreversible_high_impact_action
+
+labels:
+  85-100: "EXECUTAR/DECIDIR AGORA"
+  70-84: "ALTA PRIORIDADE"
+  50-69: "INVESTIGAR OU DELEGAR"
+  0-49: "BAIXA PRIORIDADE"
+
+notes:
+  - "Impacto absoluto prevalece sobre variação percentual isolada."
+  - "Se houver risco crítico, contenção pode preceder score."
+  - "Score é suporte à decisão, não substituto de julgamento."

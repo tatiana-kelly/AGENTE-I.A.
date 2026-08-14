@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SAL ActionExecution",
+  "type": "object",
+  "required": [
+    "decision_id",
+    "owner",
+    "due_at"
+  ],
+  "properties": {
+    "decision_id": { "type": "string" },
+    "owner": { "type": "string" },
+    "started_at": { "type": ["string", "null"], "format": "date-time" },
+    "due_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": ["string", "null"], "format": "date-time" },
+    "evidence": { "type": "array", "items": { "type": "string" } },
+    "actual_impact": { "type": ["number", "null"] },
+    "outcome": { "type": ["string", "null"] },
+    "recurrence": { "type": ["boolean", "null"] }
+  }
+}

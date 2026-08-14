@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SAL Decision",
+  "type": "object",
+  "required": [
+    "recommendation_id",
+    "decision",
+    "human_owner",
+    "timestamp"
+  ],
+  "properties": {
+    "recommendation_id": { "type": "string" },
+    "decision": { "enum": ["approved", "rejected", "request_more_evidence"] },
+    "human_owner": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "rationale": { "type": ["string", "null"] }
+  }
+}
