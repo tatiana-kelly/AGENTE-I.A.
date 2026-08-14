@@ -1,0 +1,6 @@
+[tool.ruff]
+line-length = 115
+
+[tool.ruff.lint]
+# B008: Depends(...) como default de parâmetro é o padrão idiomático do FastAPI, não um bug.
+ignore = ["B008"]

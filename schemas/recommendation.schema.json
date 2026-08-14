@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SAL Recommendation",
+  "type": "object",
+  "required": [
+    "type",
+    "action",
+    "expected_impact",
+    "effort",
+    "risk",
+    "reversibility",
+    "owner_role",
+    "deadline",
+    "success_kpi",
+    "success_target"
+  ],
+  "properties": {
+    "type": { "enum": ["containment", "structural", "optimization"] },
+    "action": { "type": "string", "description": "Verbo + objeto, nunca abstrato." },
+    "expected_impact": { "type": "string" },
+    "effort": { "enum": ["low", "medium", "high"] },
+    "risk": { "enum": ["low", "medium", "high"] },
+    "time_to_value": { "type": "string" },
+    "reversibility": { "enum": ["reversible", "partially_reversible", "irreversible"] },
+    "dependencies": { "type": "array", "items": { "type": "string" } },
+    "owner_role": { "type": "string" },
+    "deadline": { "type": "string" },
+    "success_kpi": { "type": "string" },
+    "success_target": { "type": ["number", "string"] }
+  }
+}

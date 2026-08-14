@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "sal-finance": {
+      "type": "http",
+      "url": "https://SEU-GATEWAY-MCP/sal-finance/mcp",
+      "headers": {
+        "Authorization": "Bearer ${SAL_MCP_TOKEN}"
+      }
+    },
+    "sal-operations": {
+      "type": "http",
+      "url": "https://SEU-GATEWAY-MCP/sal-operations/mcp",
+      "headers": {
+        "Authorization": "Bearer ${SAL_MCP_TOKEN}"
+      }
+    },
+    "sal-people": {
+      "type": "http",
+      "url": "https://SEU-GATEWAY-MCP/sal-people/mcp",
+      "headers": {
+        "Authorization": "Bearer ${SAL_MCP_TOKEN}"
+      }
+    },
+    "sal-documents": {
+      "type": "http",
+      "url": "https://SEU-GATEWAY-MCP/sal-documents/mcp",
+      "headers": {
+        "Authorization": "Bearer ${SAL_MCP_TOKEN}"
+      }
+    }
+  }
+}

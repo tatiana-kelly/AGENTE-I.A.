@@ -1,0 +1,41 @@
+{
+  "project": "SAL Intelligence OS",
+  "version": "0.2.0",
+  "agents_count": 26,
+  "agents": [
+    "coordenador-central",
+    "investigador",
+    "provocador",
+    "conselheiro-executivo",
+    "operacoes-carga-fracionada",
+    "coleta",
+    "transferencia",
+    "entrega",
+    "armazenagem",
+    "qualidade-farmaceutica",
+    "gerenciamento-riscos",
+    "financeiro-dre",
+    "custos-orcamento-roi",
+    "comercial-faturamento",
+    "rh-lideranca",
+    "departamento-pessoal",
+    "juridico",
+    "fiscal-contabil",
+    "perdas-ressarcimentos",
+    "compras",
+    "ti-dados",
+    "processos-produtividade",
+    "auditoria-controladoria",
+    "crises-continuidade",
+    "conflitos-governanca",
+    "solucoes-acoes-praticas"
+  ],
+  "core_rule": "maior resultado com menor esforço",
+  "generated_for": "Claude Code",
+  "changes": [
+    "Agente Soluções e Ações Práticas adicionado",
+    "Fluxo de agentes atualizado",
+    "Caso de DRE adicionado como teste comportamental",
+    "Regras de ação e testes de aceite adicionados"
+  ]
+}

@@ -1,0 +1,29 @@
+routing:
+  dre_margin_cash:
+    agents: [investigador, financeiro-dre, custos-orcamento-roi, provocador, conselheiro-executivo, solucoes-acoes-praticas]
+  fractional_operations:
+    agents: [investigador, operacoes-carga-fracionada, processos-produtividade, provocador, conselheiro-executivo, solucoes-acoes-praticas]
+  pickup:
+    agents: [investigador, coleta, custos-orcamento-roi, processos-produtividade, provocador, solucoes-acoes-praticas]
+  transfer:
+    agents: [investigador, transferencia, gerenciamento-riscos, custos-orcamento-roi, provocador, solucoes-acoes-praticas]
+  delivery:
+    agents: [investigador, entrega, custos-orcamento-roi, processos-produtividade, provocador, solucoes-acoes-praticas]
+  warehouse:
+    agents: [investigador, armazenagem, processos-produtividade, qualidade-farmaceutica, provocador, solucoes-acoes-praticas]
+  people:
+    agents: [investigador, rh-lideranca, departamento-pessoal, processos-produtividade, provocador, solucoes-acoes-praticas]
+  legal_people_risk:
+    agents: [investigador, juridico, rh-lideranca, departamento-pessoal, provocador, solucoes-acoes-praticas]
+  quality_pharma:
+    agents: [investigador, qualidade-farmaceutica, gerenciamento-riscos, provocador, solucoes-acoes-praticas]
+  loss_claim:
+    agents: [investigador, perdas-ressarcimentos, gerenciamento-riscos, operacoes-carga-fracionada, provocador, solucoes-acoes-praticas]
+  commercial_profitability:
+    agents: [investigador, comercial-faturamento, financeiro-dre, custos-orcamento-roi, provocador, solucoes-acoes-praticas]
+  tax_accounting:
+    agents: [investigador, fiscal-contabil, auditoria-controladoria, financeiro-dre, provocador, solucoes-acoes-praticas]
+  technology_data:
+    agents: [investigador, ti-dados, auditoria-controladoria, provocador, solucoes-acoes-praticas]
+  crisis:
+    agents: [crises-continuidade, investigador, gerenciamento-riscos, conselheiro-executivo, solucoes-acoes-praticas]

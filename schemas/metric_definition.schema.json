@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SAL MetricDefinition",
+  "type": "object",
+  "required": [
+    "name",
+    "objective",
+    "formula",
+    "source",
+    "grain",
+    "owner",
+    "materiality_rule",
+    "update_frequency"
+  ],
+  "properties": {
+    "name": { "type": "string" },
+    "objective": { "type": "string" },
+    "formula": { "type": "string" },
+    "source": { "type": "string" },
+    "grain": { "type": "string" },
+    "owner": { "type": "string" },
+    "target": { "type": ["number", "null"] },
+    "warning_threshold": { "type": ["number", "null"] },
+    "critical_threshold": { "type": ["number", "null"] },
+    "materiality_rule": { "type": "string" },
+    "update_frequency": { "type": "string" },
+    "version": { "type": "integer", "default": 1 }
+  }
+}
