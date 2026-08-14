@@ -73,6 +73,18 @@ export interface OrchestrationRequest {
   mode?: "auto" | ExecutionMode;
 }
 
+export type StepStatus = "success" | "error" | "skipped";
+
+export interface StepExecutionResult {
+  provider: ProviderName;
+  purpose: string;
+  status: StepStatus;
+  /** Só presente quando status === "success". */
+  output?: string;
+  /** Motivo do skip/erro — nunca lançado sem ser reportado (FASE 10). */
+  reason?: string;
+}
+
 export interface OrchestrationResult {
   classification: ClassificationResult;
   context: ResolvedContext;
@@ -81,4 +93,12 @@ export interface OrchestrationResult {
   executionMode: ExecutionMode;
   dryRun: boolean;
   requiresApproval: boolean;
+  /** Vazio quando o gate de segurança bloqueou a execução (ver `requiresApproval`). */
+  results: StepExecutionResult[];
+  evidence: EvidenceRecord[];
+  validation?: {
+    reviewed: boolean;
+    reviewer?: ProviderName;
+    reviewOutput?: string;
+  };
 }
