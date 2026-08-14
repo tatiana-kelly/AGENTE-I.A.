@@ -18,13 +18,19 @@ VERCEL            = DEPLOY
 
 Ver [DISCOVERY-REPORT.md](DISCOVERY-REPORT.md) para o levantamento que precedeu a implementação (arquitetura encontrada, prior art reaproveitável, gaps, riscos).
 
-## Status atual: FASE 1 (CORE) + FASE 2 (PROVIDERS) implementadas
+## Status atual: FASE 1 (CORE) + FASE 2 (PROVIDERS) + FASE 5 (CONTEXTO) implementadas
 
-O núcleo de decisão do orchestrator classifica a tarefa, resolve contexto, decide roteamento, monta o plano de execução (um agente ou cadeia multi-agente), e aplica os modos de segurança/custo. Os 4 providers (`src/providers/`) implementam `AIProvider` via `fetch` direto (sem SDK) contra as APIs REST oficiais de cada um — **nenhum ainda foi chamado com uma chave real**, só testado com fetch mockado. `buildProviderManagerFromEnv()` registra automaticamente só os providers cuja API key existir no `.env`.
+O orchestrator classifica a tarefa, resolve contexto, decide roteamento, monta o plano (um agente ou cadeia multi-agente), aplica o gate de segurança/custo, **chama os providers de verdade** (`ProviderManager`), roda a cadeia de revisão (FASE 9) e registra evidência (FASE 8) — pipeline completo, ponta a ponta. `buildProviderManagerFromEnv()` registra automaticamente só os providers cuja API key existir no `.env`; provider sem chave configurada é pulado (`status: "skipped"`), nunca quebra a execução.
+
+**Único provider ativo hoje: Anthropic** (única chave de IA encontrada no ecossistema local — ver `DISCOVERY-REPORT.md`). OpenAI/Manus/Gemini estão implementados mas sem chave configurada.
+
+⚠️ **Teste real (FASE 19) já rodado** (`scripts/real-test.mjs`) — a pipeline funciona corretamente ponta a ponta, mas a chamada real à Anthropic falhou por **falta de crédito na conta dona da chave atual** (não é bug — ver [REAL-TEST-REPORT.md](REAL-TEST-REPORT.md)). Rodar de novo depois de resolver o crédito.
 
 ⚠️ **Manus**: a doc oficial da API v2 foi consultada em 2026-08-13 (`open.manus.im/docs/api-reference/...`) para `task.create` e `task.detail`, confirmados. O endpoint `task.listMessages` usado para buscar o resultado final é citado por nome na doc mas seu schema de resposta não pôde ser confirmado nesta sessão — **validar contra uma chamada real antes de depender disso em produção** (ver comentário em `src/providers/manus.ts`).
 
-`orchestrate()` ainda **não invoca os providers** — a integração ponta a ponta (Router decide → Provider Manager chama → Validation Engine revisa → Evidence Manager registra) é o próximo passo, não incluído nesta fase.
+⚠️ **Heurística de ação de escrita** (FASE 7): `orchestrate()` usa `classification.requiresImplementation` pra decidir se uma tarefa é "escrita" (exige aprovação fora de AUTONOMOUS). Isso é só um sinal por palavra-chave no prompt — uma tarefa de *análise* de código pode acionar as mesmas palavras-chave de uma tarefa de *implementação* e ser tratada como escrita indevidamente. Documentado como limitação conhecida em `src/orchestrator/index.ts`, não resolvido ainda.
+
+**FASE 5 — Contexto**: `projects/_template/` tem o esqueleto dos 5 arquivos (`PROJECT-CONTEXT.md`, `DATA-DICTIONARY.md`, `BUSINESS-RULES.md`, `ARCHITECTURE.md`, `AI-INSTRUCTIONS.md`) e `projects/README.md` documenta a convenção. Nenhum projeto real foi populado ainda — fazer isso exige conhecimento de negócio real, não deve ser inventado.
 
 ### Módulos (`src/orchestrator/`)
 
@@ -44,8 +50,6 @@ O núcleo de decisão do orchestrator classifica a tarefa, resolve contexto, dec
 
 ### O que falta (não implementado ainda)
 
-- **Integração ponta a ponta**: `orchestrate()` ainda não chama o `ProviderManager` — hoje ele só decide o plano, não executa
-- **FASE 5** — pasta `projects/<project>/` populada de verdade (o Context Resolver já sabe ler, mas nenhum projeto foi criado)
 - **FASE 6** — `skills/` com `SKILL.md`/`ROUTING.md`/`VALIDATION.md`
 - **FASE 11** — persistência real em Supabase para `ai_tasks`/`ai_runs`/`ai_evidence` (ver seção "Reaproveitamento" abaixo — não desenhar do zero)
 - **FASE 13** — API HTTP (`POST /orchestrate`, `GET /tasks/:id`, `POST /tasks/:id/continue`) e integração com n8n
