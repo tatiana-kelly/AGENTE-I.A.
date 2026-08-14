@@ -9,9 +9,9 @@ Sem ANTHROPIC_API_KEY configurada, mostra só o Alert gerado a partir do conecto
 """
 
 import json
-import os
 
 from app.connectors.mock.dre_connector import MockDreConnector
+from app.core.config import get_settings
 
 PERIOD = "2026-07"
 
@@ -45,7 +45,7 @@ def main() -> None:
     print(description)
     print()
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if not get_settings().anthropic_api_key:
         print(
             "ANTHROPIC_API_KEY não configurada — parando aqui.\n"
             "Configure no backend/.env (copie de .env.example) e rode de novo para ver a "

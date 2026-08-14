@@ -3,14 +3,13 @@ reais via Claude API. Requer ANTHROPIC_API_KEY configurada — sem ela, pulado (
 roda em qualquer máquina sem custo/rede, então não entra no CI padrão por enquanto).
 """
 
-import os
-
 import pytest
 
+from app.core.config import get_settings
 from app.services.orchestrator import Orchestrator
 
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("ANTHROPIC_API_KEY"),
+    not get_settings().anthropic_api_key,
     reason="requer ANTHROPIC_API_KEY real; roda sob demanda, não no CI padrão",
 )
 
