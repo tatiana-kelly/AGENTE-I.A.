@@ -18,9 +18,13 @@ VERCEL            = DEPLOY
 
 Ver [DISCOVERY-REPORT.md](DISCOVERY-REPORT.md) para o levantamento que precedeu a implementação (arquitetura encontrada, prior art reaproveitável, gaps, riscos).
 
-## Status atual: FASE 1 (CORE) implementada
+## Status atual: FASE 1 (CORE) + FASE 2 (PROVIDERS) implementadas
 
-O que existe hoje é o núcleo de decisão do orchestrator — classifica a tarefa, resolve contexto, decide roteamento, monta o plano de execução (um agente ou cadeia multi-agente), e aplica os modos de segurança/custo. **Nenhum provider real (OpenAI/Manus/Anthropic/Gemini) está implementado ainda** — isso é a FASE 2, próxima etapa, pendente de decisão sobre chaves de API e SDKs.
+O núcleo de decisão do orchestrator classifica a tarefa, resolve contexto, decide roteamento, monta o plano de execução (um agente ou cadeia multi-agente), e aplica os modos de segurança/custo. Os 4 providers (`src/providers/`) implementam `AIProvider` via `fetch` direto (sem SDK) contra as APIs REST oficiais de cada um — **nenhum ainda foi chamado com uma chave real**, só testado com fetch mockado. `buildProviderManagerFromEnv()` registra automaticamente só os providers cuja API key existir no `.env`.
+
+⚠️ **Manus**: a doc oficial da API v2 foi consultada em 2026-08-13 (`open.manus.im/docs/api-reference/...`) para `task.create` e `task.detail`, confirmados. O endpoint `task.listMessages` usado para buscar o resultado final é citado por nome na doc mas seu schema de resposta não pôde ser confirmado nesta sessão — **validar contra uma chamada real antes de depender disso em produção** (ver comentário em `src/providers/manus.ts`).
+
+`orchestrate()` ainda **não invoca os providers** — a integração ponta a ponta (Router decide → Provider Manager chama → Validation Engine revisa → Evidence Manager registra) é o próximo passo, não incluído nesta fase.
 
 ### Módulos (`src/orchestrator/`)
 
@@ -40,7 +44,7 @@ O que existe hoje é o núcleo de decisão do orchestrator — classifica a tare
 
 ### O que falta (não implementado ainda)
 
-- **FASE 2** — providers reais (OpenAI, Manus, Anthropic, Gemini) implementando `AIProvider`
+- **Integração ponta a ponta**: `orchestrate()` ainda não chama o `ProviderManager` — hoje ele só decide o plano, não executa
 - **FASE 5** — pasta `projects/<project>/` populada de verdade (o Context Resolver já sabe ler, mas nenhum projeto foi criado)
 - **FASE 6** — `skills/` com `SKILL.md`/`ROUTING.md`/`VALIDATION.md`
 - **FASE 11** — persistência real em Supabase para `ai_tasks`/`ai_runs`/`ai_evidence` (ver seção "Reaproveitamento" abaixo — não desenhar do zero)
