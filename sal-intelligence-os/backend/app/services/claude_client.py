@@ -47,6 +47,16 @@ class ClaudeClient:
             tool_choice={"type": "tool", "name": tool_schema["name"]},
             messages=[{"role": "user", "content": user_message}],
         )
+        if response.stop_reason == "max_tokens":
+            # A geração da tool call foi cortada por max_tokens antes de fechar o JSON — a SDK
+            # normalmente devolve block.input == {} nesse caso, o que depois vira "Field required"
+            # em TODOS os campos na validação Pydantic e esconde a causa real. Achado real ao
+            # rodar o caso DRE de ponta a ponta (2026-08-15) — ver orchestrator.py.
+            raise RuntimeError(
+                f"resposta cortada por max_tokens={max_tokens} antes de completar a tool call "
+                f"'{tool_schema['name']}' — aumente max_tokens em vez de tratar isso como falha "
+                "de validação do schema."
+            )
         for block in response.content:
             if block.type == "tool_use":
                 return block.input

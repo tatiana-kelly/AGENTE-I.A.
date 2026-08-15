@@ -26,6 +26,23 @@ _DIAGNOSIS_TOOL_SCHEMA = {
 }
 
 
+def _unwrap_if_nested(raw: dict) -> dict:
+    """Claude ocasionalmente aninha a saída da tool call inteira dentro de uma única chave
+    (ex.: {"diagnosis": {hypotheses: ..., ...}}) mesmo com o schema pedindo os campos no nível
+    raiz — comportamento do modelo, não bug determinístico, então uma instrução mais explícita
+    no prompt reduz mas não elimina. Se o dict recebido não tem os campos esperados diretamente
+    mas tem exatamente uma chave cujo valor já parece o objeto certo (tem pelo menos "hypotheses"
+    ou "recommendations"), usa esse valor em vez de falhar a validação. Achado real ao rodar
+    scripts/run_dre_case.py de ponta a ponta com LLM real (2026-08-15)."""
+    if "hypotheses" in raw or "recommendations" in raw:
+        return raw
+    if len(raw) == 1:
+        (only_value,) = raw.values()
+        if isinstance(only_value, dict) and ("hypotheses" in only_value or "recommendations" in only_value):
+            return only_value
+    return raw
+
+
 @dataclass
 class OrchestrationResult:
     case_type: str
@@ -75,15 +92,22 @@ class Orchestrator:
             "Você consolida a investigação abaixo em um Diagnosis final, chamando a tool "
             "submit_diagnosis. Não invente dado que não apareceu na investigação; se faltar, "
             "liste em missing_data. As 3 recomendações têm que cobrir exatamente containment, "
-            "structural e optimization."
+            "structural e optimization. IMPORTANTE: os argumentos da tool call devem ser os campos "
+            "(hypotheses, probable_cause, confidence, recommendations, owner, success_kpi, ...) "
+            "DIRETAMENTE no nível raiz do input da tool — não aninhe tudo dentro de uma chave "
+            "'diagnosis' ou qualquer outro wrapper."
         )
         try:
             raw = self.claude.complete_structured(
                 system=extraction_prompt,
                 user_message=transcript_text,
                 tool_schema=_DIAGNOSIS_TOOL_SCHEMA,
+                # Diagnosis exige >=1 hipótese + exatamente 3 recomendações (12 campos cada,
+                # ver RecommendationBase) a partir de um transcript de 6 agentes já longo — o
+                # default de complete_structured (4096) pode cortar a tool call no meio.
+                max_tokens=16000,
             )
-            result.diagnosis = DiagnosisBase.model_validate(raw)
+            result.diagnosis = DiagnosisBase.model_validate(_unwrap_if_nested(raw))
         except ValidationError as exc:
             result.diagnosis_error = f"saída do agente não atende ao contrato de Diagnosis: {exc}"
             self.audit.record(
