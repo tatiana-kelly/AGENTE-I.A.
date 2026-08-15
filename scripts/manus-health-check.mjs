@@ -14,4 +14,6 @@ const provider = new ManusProvider({
 
 const status = await provider.healthCheck();
 console.log(JSON.stringify(status, null, 2));
-process.exit(status.healthy ? 0 : 1);
+// process.exitCode em vez de process.exit(): chamar exit() logo após um fetch dispara um
+// assertion crash conhecido do libuv no Node/Windows (handle de socket ainda fechando).
+process.exitCode = status.healthy ? 0 : 1;
