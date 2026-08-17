@@ -7,6 +7,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/api/server.js",
+    "project:init": "npm run build && node dist/cli/project.js init",
+    "project:validate": "npm run build && node dist/cli/project.js validate",
+    "project:sync": "npm run build && node dist/cli/project.js sync",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

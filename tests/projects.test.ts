@@ -3,7 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { InMemoryOrchestrationRepository } from "../src/persistence/index.js";
-import { loadManifestContext, loadProjectManifest, parseProjectManifest, syncProjectFromRoot } from "../src/projects/index.js";
+import {
+  initializeProjectKit,
+  loadManifestContext,
+  loadProjectManifest,
+  parseProjectManifest,
+  syncProjectFromRoot,
+} from "../src/projects/index.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -49,6 +55,31 @@ describe("AI-PROJECT.yaml", () => {
     expect(await repository.listProjectPermissions("demo-project")).toMatchObject([
       { principalId: "codex", capability: "read_context" },
     ]);
+  });
+
+  it("instala o kit sem sobrescrever arquivos existentes", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "sal-ai-onboarding-"));
+    temporaryDirectories.push(root);
+    await writeFile(path.join(root, "AGENTS.md"), "# Regra existente\n", "utf8");
+
+    const first = await initializeProjectKit({
+      projectRoot: root,
+      projectId: "new-project",
+      name: "Novo Projeto",
+      repository: "sal/new-project",
+    });
+    const second = await initializeProjectKit({
+      projectRoot: root,
+      projectId: "new-project",
+      name: "Novo Projeto",
+      repository: "sal/new-project",
+    });
+
+    expect(first.existing).toContain("AGENTS.md");
+    expect(first.created).toContain("AI-PROJECT.yaml");
+    expect(second.created).toEqual([]);
+    expect(second.existing).toHaveLength(first.created.length + first.existing.length);
+    expect((await loadProjectManifest(root)).project_id).toBe("new-project");
   });
 });
 
