@@ -27,6 +27,7 @@ export type EffectLevel = "READ" | "WRITE" | "EXTERNAL_ACTION" | "UNKNOWN";
 export type AgentMode = "ONE_AGENT" | "MULTI_AGENT";
 
 export type ValidationStatus = "APPROVED" | "REJECTED" | "NEEDS_HUMAN";
+export type EvidenceStatus = "success" | "error" | "skipped" | "blocked";
 
 export interface ClassificationResult {
   skills: SkillCategory[];
@@ -69,6 +70,8 @@ export interface EvidenceRecord {
   sources: string[];
   evidence: string[];
   result: string;
+  status: EvidenceStatus;
+  reason?: string;
   confidence: number;
   timestamp: string;
   limitations?: string;

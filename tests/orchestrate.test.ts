@@ -69,7 +69,8 @@ describe("orchestrate() — execução ponta a ponta", () => {
 
     expect(result.requiresApproval).toBe(true);
     expect(result.results).toEqual([]);
-    expect(result.evidence).toEqual([]);
+    expect(result.evidence).toHaveLength(1);
+    expect(result.evidence[0]).toMatchObject({ status: "blocked", reason: expect.stringContaining("READ_ONLY") });
   });
 
   it("bloqueia falso negativo de escrita em READ_ONLY antes de chamar provider", async () => {
@@ -109,7 +110,7 @@ describe("orchestrate() — execução ponta a ponta", () => {
 
     expect(result.results[0]).toMatchObject({ provider: "manus", status: "skipped" });
     expect(result.results[0]?.reason).toMatch(/READ_ONLY/);
-    expect(result.evidence).toEqual([]);
+    expect(result.evidence.every((record) => record.status === "skipped")).toBe(true);
   });
 
   it("executa o fallback declarado quando o provider primário não está registrado", async () => {
@@ -125,7 +126,10 @@ describe("orchestrate() — execução ponta a ponta", () => {
     expect(result.plan.mode).toBe("MULTI_AGENT");
     expect(result.results[0]).toMatchObject({ provider: "manus", status: "skipped" });
     expect(result.results[1]).toMatchObject({ provider: "openai", fallbackFor: "manus", status: "success" });
-    expect(result.evidence[0]).toMatchObject({ fallback_triggered: true, fallback_reason: expect.stringContaining("manus") });
+    expect(result.evidence.find((record) => record.fallback_triggered)).toMatchObject({
+      fallback_triggered: true,
+      fallback_reason: expect.stringContaining("manus"),
+    });
   });
 
   it("bloqueia antes da chamada quando o provider não declara teto de custo", async () => {

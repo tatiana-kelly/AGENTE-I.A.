@@ -43,6 +43,8 @@ export async function orchestrate(
   const classification = classifyTask(request.task);
   const routing = routeTask(classification);
   const plan = planTask(classification, routing);
+  const results: StepExecutionResult[] = [];
+  const evidence: EvidenceRecord[] = [];
 
   const gate = evaluateExecution(security, classification.effectLevel);
 
@@ -54,17 +56,38 @@ export async function orchestrate(
     executionMode: security.mode,
     dryRun: security.dryRun,
     requiresApproval: gate.requiresApproval || !gate.allowed,
-    results: [],
-    evidence: [],
+    results,
+    evidence,
+  };
+
+  const recordNonSuccess = async (
+    taskId: string,
+    provider: ProviderName,
+    status: "error" | "skipped" | "blocked",
+    reason: string,
+  ): Promise<void> => {
+    const record = buildEvidenceRecord({
+      taskId,
+      project: request.project,
+      provider,
+      skill: classification.skills[0],
+      routingReason: routing.reason,
+      result: { output: "", sources: [], evidence: [] },
+      status,
+      reason,
+      confidence: routing.confidence,
+      timestamp: new Date().toISOString(),
+    });
+    await evidenceSink.record(record);
+    evidence.push(record);
   };
 
   if (!gate.allowed) {
     observability.log({ task_id: request.task, status: "skipped", error: gate.reason });
+    await recordNonSuccess(`${Date.now()}-blocked`, routing.primary, "blocked", gate.reason);
     return base;
   }
 
-  const results: StepExecutionResult[] = [];
-  const evidence: EvidenceRecord[] = [];
   let lastSuccessful: { provider: ProviderName; result: TaskResult } | undefined;
   let planCompleted = true;
   let reservedCostUsd = 0;
@@ -82,6 +105,7 @@ export async function orchestrate(
         const reason = "Provider não registrado no Provider Manager.";
         results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason });
         observability.log({ task_id: taskId, provider: candidate, status: "skipped", error: reason });
+        await recordNonSuccess(taskId, candidate, "skipped", reason);
         failedReasons.push(`${candidate}: ${reason}`);
         continue;
       }
@@ -95,6 +119,7 @@ export async function orchestrate(
       if (!providerGate.allowed) {
         results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason: providerGate.reason });
         observability.log({ task_id: taskId, provider: candidate, status: "skipped", error: providerGate.reason });
+        await recordNonSuccess(taskId, candidate, "skipped", providerGate.reason);
         base.requiresApproval ||= providerGate.requiresApproval;
         failedReasons.push(`${candidate}: ${providerGate.reason}`);
         continue;
@@ -108,6 +133,7 @@ export async function orchestrate(
       if (!cost.withinBudget || cost.requiresConfirmation) {
         results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason: cost.reason });
         observability.log({ task_id: taskId, provider: candidate, status: "skipped", error: cost.reason });
+        await recordNonSuccess(taskId, candidate, "skipped", cost.reason);
         base.requiresApproval = true;
         failedReasons.push(`${candidate}: ${cost.reason}`);
         continue;
@@ -155,6 +181,7 @@ export async function orchestrate(
         const message = error instanceof Error ? error.message : String(error);
         results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "error", reason: message });
         observability.log({ task_id: taskId, provider: candidate, status: "error", duration_ms: Math.round(durationMs), error: message });
+        await recordNonSuccess(taskId, candidate, "error", message);
         failedReasons.push(`${candidate}: ${message}`);
       }
     }

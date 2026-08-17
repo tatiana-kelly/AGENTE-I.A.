@@ -1,5 +1,5 @@
 import type { ProviderName, TaskResult } from "../providers/types.js";
-import type { EvidenceRecord, SkillCategory } from "./types.js";
+import type { EvidenceRecord, EvidenceStatus, SkillCategory } from "./types.js";
 
 /**
  * FASE 8 — Evidence-First. Sink is pluggable so FASE 11 can add a Supabase
@@ -31,6 +31,8 @@ export interface BuildEvidenceParams {
   skill?: SkillCategory;
   routingReason: string;
   result: TaskResult;
+  status?: EvidenceStatus;
+  reason?: string;
   confidence: number;
   timestamp: string;
   limitations?: string;
@@ -55,6 +57,8 @@ export function buildEvidenceRecord(params: BuildEvidenceParams): EvidenceRecord
     sources: params.result.sources,
     evidence: params.result.evidence,
     result: params.result.output,
+    status: params.status ?? "success",
+    reason: params.reason,
     confidence: params.confidence,
     timestamp: params.timestamp,
     limitations: params.limitations,
