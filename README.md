@@ -18,7 +18,7 @@ VERCEL            = DEPLOY
 
 Ver [DISCOVERY-REPORT.md](DISCOVERY-REPORT.md) para o levantamento que precedeu a implementação (arquitetura encontrada, prior art reaproveitável, gaps, riscos).
 
-## Status atual: core + persistência + API + padrão de projetos/MCP implementados localmente
+## Status atual: core + persistência + API + padrão de projetos/MCP implementados
 
 O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION`/`UNKNOWN`), resolve contexto, decide roteamento, monta e encadeia o plano multi-agente, aplica segurança e reserva de custo **antes** da chamada, executa fallback controlado, valida sem autorrevisão e registra tarefas, runs e evidências inclusive para bloqueios/erros. `UNKNOWN`, custo sem teto configurado e pedido de aprovação de provider falham fechados.
 
@@ -112,7 +112,7 @@ As migrations locais estão em `supabase/migrations/`. Elas criam `ai_tasks`, `a
 
 Quando `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estiverem configuradas juntas, `orchestrate()` ativa automaticamente o `SupabaseOrchestrationRepository`. Sem ambas, o fluxo continua sem persistência remota; para testes, injete `InMemoryOrchestrationRepository`. Configuração parcial falha antes de chamar qualquer IA.
 
-Esta branch apenas cria as migrations: elas **não foram aplicadas a nenhum Supabase remoto**. Aplicá-las e executar um teste contratual real exigem um ambiente exclusivo do projeto.
+As três migrations foram aplicadas em 17/08/2026 ao projeto Supabase exclusivo `sal-ai-orchestrator`. O teste contratual remoto confirmou escrita e leitura via `service_role`, bloqueio do acesso `anon` com HTTP 401 e remoção do registro temporário de validação. URL e chaves continuam obrigatoriamente fora do repositório e devem ser fornecidas pelas variáveis de ambiente acima.
 
 ## API HTTP (FASE 13)
 
