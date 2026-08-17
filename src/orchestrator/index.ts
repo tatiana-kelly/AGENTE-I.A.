@@ -183,6 +183,10 @@ export async function orchestrate(
         observability.log({ task_id: taskId, provider: candidate, status: "error", duration_ms: Math.round(durationMs), error: message });
         await recordNonSuccess(taskId, candidate, "error", message);
         failedReasons.push(`${candidate}: ${message}`);
+        if (requiresExplicitApproval(error)) {
+          base.requiresApproval = true;
+          break;
+        }
       }
     }
 
@@ -263,6 +267,14 @@ function providerCandidates(
   fallback: ProviderName | undefined,
 ): ProviderName[] {
   return provider === primary && fallback && fallback !== provider ? [provider, fallback] : [provider];
+}
+
+function requiresExplicitApproval(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "requiresApproval" in error &&
+    (error as Error & { requiresApproval?: unknown }).requiresApproval === true
+  );
 }
 
 const MAX_CONTEXT_CHARS = 40_000;

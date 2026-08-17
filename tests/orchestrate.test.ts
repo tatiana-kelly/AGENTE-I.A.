@@ -39,6 +39,13 @@ class ExpensiveFakeProvider extends FakeProvider {
   override readonly capabilities: ProviderCapabilities = { mayProduceExternalEffects: false, estimatedMaxCostUsd: 2 };
 }
 
+class ApprovalRequiredFakeProvider extends FakeProvider {
+  override async analyze(input: TaskInput): Promise<TaskResult> {
+    this.inputs.push(input);
+    throw Object.assign(new Error("aguarda confirmação"), { requiresApproval: true });
+  }
+}
+
 describe("orchestrate() — execução ponta a ponta", () => {
   it("executa leitura segura em READ_ONLY, registra evidência e sinaliza ausência de reviewer", async () => {
     const manager = new ProviderManager();
@@ -130,6 +137,24 @@ describe("orchestrate() — execução ponta a ponta", () => {
       fallback_triggered: true,
       fallback_reason: expect.stringContaining("manus"),
     });
+  });
+
+  it("não usa fallback para contornar pedido explícito de aprovação do provider", async () => {
+    const manager = new ProviderManager();
+    const manus = new ApprovalRequiredFakeProvider("manus", "");
+    const openai = new FakeProvider("openai", "não deveria rodar");
+    manager.register(manus);
+    manager.register(openai);
+
+    const result = await orchestrate(
+      { task: "Investigue profundamente esse problema." },
+      { security: { mode: "AUTONOMOUS", dryRun: false }, providerManager: manager },
+    );
+
+    expect(result.requiresApproval).toBe(true);
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]).toMatchObject({ provider: "manus", status: "error", reason: "aguarda confirmação" });
+    expect(openai.inputs).toHaveLength(0);
   });
 
   it("bloqueia antes da chamada quando o provider não declara teto de custo", async () => {

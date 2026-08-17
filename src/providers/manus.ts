@@ -96,6 +96,8 @@ type CreateTaskResponse = z.infer<typeof createTaskResponseSchema>;
 type TaskDetailResponse = z.infer<typeof taskDetailResponseSchema>;
 
 export class ManusTaskWaitingError extends Error {
+  readonly requiresApproval = true;
+
   constructor(public readonly taskId: string) {
     super(`Task Manus ${taskId} aguarda confirmação ou entrada do usuário.`);
     this.name = "ManusTaskWaitingError";

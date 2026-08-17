@@ -82,7 +82,6 @@ export interface EvidenceRecord {
 export interface OrchestrationRequest {
   task: string;
   project?: string;
-  mode?: "auto" | ExecutionMode;
 }
 
 export type StepStatus = "success" | "error" | "skipped";
