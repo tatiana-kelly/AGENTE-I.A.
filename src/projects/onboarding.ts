@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { stringify } from "yaml";
 import { projectManifestSchema, type ProjectManifest } from "./manifest.js";
@@ -36,11 +36,12 @@ export async function initializeProjectKit(input: InitializeProjectInput): Promi
   const files = projectTemplates(manifest);
   const result: InitializeProjectResult = { created: [], existing: [] };
   await mkdir(input.projectRoot, { recursive: true });
+  const realProjectRoot = await realpath(input.projectRoot);
 
   for (const [relativePath, contents] of Object.entries(files)) {
-    const destination = path.resolve(input.projectRoot, relativePath);
-    assertInside(input.projectRoot, destination);
-    await mkdir(path.dirname(destination), { recursive: true });
+    const destination = path.resolve(realProjectRoot, relativePath);
+    assertInside(realProjectRoot, destination);
+    await ensureSafeParent(realProjectRoot, relativePath);
     try {
       await writeFile(destination, contents, { encoding: "utf8", flag: "wx" });
       result.created.push(relativePath);
@@ -109,4 +110,23 @@ function assertInside(root: string, candidate: string): void {
 
 function isAlreadyExists(error: unknown): boolean {
   return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "EEXIST";
+}
+
+async function ensureSafeParent(root: string, relativeFilePath: string): Promise<void> {
+  const segments = relativeFilePath.split("/").slice(0, -1);
+  let current = root;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    try {
+      const stats = await lstat(current);
+      if (stats.isSymbolicLink()) throw new Error(`Onboarding recusou diretório simbólico: ${segment}.`);
+      if (!stats.isDirectory()) throw new Error(`Onboarding esperava um diretório: ${segment}.`);
+    } catch (error) {
+      if (error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT") {
+        await mkdir(current);
+        continue;
+      }
+      throw error;
+    }
+  }
 }

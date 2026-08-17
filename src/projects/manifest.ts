@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
@@ -70,22 +70,26 @@ export async function loadManifestContext(
   manifest: ProjectManifest,
   maxTotalBytes = 500_000,
 ): Promise<LoadedProjectContext> {
-  const contextRoot = path.resolve(projectRoot, manifest.context.root);
-  assertInsideProject(projectRoot, contextRoot);
+  const realProjectRoot = await realpath(projectRoot);
+  const contextRoot = await realpath(path.resolve(realProjectRoot, manifest.context.root));
+  assertInsideProject(realProjectRoot, contextRoot);
   const files: Record<string, string> = {};
   const missing: string[] = [];
   let totalBytes = 0;
 
   for (const fileName of manifest.context.files) {
-    const filePath = path.resolve(contextRoot, fileName);
-    assertInsideProject(contextRoot, filePath);
     try {
+      const filePath = await realpath(path.resolve(contextRoot, fileName));
+      assertInsideProject(contextRoot, filePath);
       const contents = await readFile(filePath, "utf8");
       totalBytes += Buffer.byteLength(contents);
       if (totalBytes > maxTotalBytes) throw new Error(`Contexto excede ${maxTotalBytes} bytes.`);
       files[fileName] = contents;
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith("Contexto excede")) throw error;
+      if (
+        error instanceof Error &&
+        (error.message.startsWith("Contexto excede") || error.message === "Caminho de contexto fora do projeto.")
+      ) throw error;
       missing.push(fileName);
     }
   }

@@ -10,6 +10,7 @@
     "project:init": "npm run build && node dist/cli/project.js init",
     "project:validate": "npm run build && node dist/cli/project.js validate",
     "project:sync": "npm run build && node dist/cli/project.js sync",
+    "project:grant": "npm run build && node dist/cli/project.js grant",
     "mcp:start": "node dist/mcp/stdio.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
