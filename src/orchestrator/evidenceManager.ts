@@ -23,6 +23,7 @@ export class InMemoryEvidenceSink implements EvidenceSink {
 
 export interface BuildEvidenceParams {
   taskId: string;
+  runId?: string;
   project?: string;
   provider: ProviderName;
   model?: string;
@@ -47,6 +48,7 @@ export interface BuildEvidenceParams {
 export function buildEvidenceRecord(params: BuildEvidenceParams): EvidenceRecord {
   return {
     task_id: params.taskId,
+    run_id: params.runId,
     project: params.project,
     provider: params.provider,
     model: params.model,

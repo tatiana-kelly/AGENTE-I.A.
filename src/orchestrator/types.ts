@@ -62,6 +62,7 @@ export interface TaskPlan {
 /** FASE 8 — Evidence-First. Structured fields only, no private chain-of-thought. */
 export interface EvidenceRecord {
   task_id: string;
+  run_id?: string;
   project?: string;
   provider: ProviderName;
   model?: string;
@@ -99,6 +100,7 @@ export interface StepExecutionResult {
 }
 
 export interface OrchestrationResult {
+  taskId: string;
   classification: ClassificationResult;
   context: ResolvedContext;
   routing: RoutingDecision;
