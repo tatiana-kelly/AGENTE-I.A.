@@ -18,17 +18,19 @@ VERCEL            = DEPLOY
 
 Ver [DISCOVERY-REPORT.md](DISCOVERY-REPORT.md) para o levantamento que precedeu a implementação (arquitetura encontrada, prior art reaproveitável, gaps, riscos).
 
-## Status atual: FASE 1 (CORE) + FASE 2 (PROVIDERS) + FASE 5 (CONTEXTO) implementadas
+## Status atual: core endurecido; persistência e API ainda pendentes
 
-O orchestrator classifica a tarefa, resolve contexto, decide roteamento, monta o plano (um agente ou cadeia multi-agente), aplica o gate de segurança/custo, **chama os providers de verdade** (`ProviderManager`), roda a cadeia de revisão (FASE 9) e registra evidência (FASE 8) — pipeline completo, ponta a ponta. `buildProviderManagerFromEnv()` registra automaticamente só os providers cuja API key existir no `.env`; provider sem chave configurada é pulado (`status: "skipped"`), nunca quebra a execução.
+O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION`/`UNKNOWN`), resolve contexto, decide roteamento, monta e encadeia o plano multi-agente, aplica segurança e reserva de custo **antes** da chamada, executa fallback controlado, valida sem autorrevisão e registra evidência inclusive para bloqueios/erros. `UNKNOWN`, custo sem teto configurado e pedido de aprovação de provider falham fechados.
+
+**Testes locais:** 44 testes em 4 arquivos, além de `typecheck` e `build`. Continuam sendo testes locais/mockados; não substituem certificação real dos providers.
 
 **Único provider ativo hoje: Anthropic** (única chave de IA encontrada no ecossistema local — ver `DISCOVERY-REPORT.md`). OpenAI/Manus/Gemini estão implementados mas sem chave configurada.
 
-⚠️ **Teste real (FASE 19) já rodado** (`scripts/real-test.mjs`) — a pipeline funciona corretamente ponta a ponta, mas a chamada real à Anthropic falhou por **falta de crédito na conta dona da chave atual** (não é bug — ver [REAL-TEST-REPORT.md](REAL-TEST-REPORT.md)). Rodar de novo depois de resolver o crédito.
+⚠️ **Teste real histórico** (`scripts/real-test.mjs`) — chegou à API Anthropic, mas falhou por falta de crédito antes de validar o caminho de sucesso. Ver [REAL-TEST-REPORT.md](REAL-TEST-REPORT.md). Precisa ser repetido após configurar billing e `ANTHROPIC_MAX_COST_PER_CALL_USD`.
 
-⚠️ **Manus**: a doc oficial da API v2 foi consultada em 2026-08-13 (`open.manus.im/docs/api-reference/...`) para `task.create` e `task.detail`, confirmados. O endpoint `task.listMessages` usado para buscar o resultado final é citado por nome na doc mas seu schema de resposta não pôde ser confirmado nesta sessão — **validar contra uma chamada real antes de depender disso em produção** (ver comentário em `src/providers/manus.ts`).
+⚠️ **Manus**: o adapter foi alinhado em 2026-08-17 ao schema oficial v2 de eventos de `task.listMessages`, incluindo paginação e estado `waiting`. Fixtures no formato legado agora são rejeitados. Ainda é obrigatório um teste contratual real antes de ativá-lo em produção.
 
-⚠️ **Heurística de ação de escrita** (FASE 7): `orchestrate()` usa `classification.requiresImplementation` pra decidir se uma tarefa é "escrita" (exige aprovação fora de AUTONOMOUS). Isso é só um sinal por palavra-chave no prompt — uma tarefa de *análise* de código pode acionar as mesmas palavras-chave de uma tarefa de *implementação* e ser tratada como escrita indevidamente. Documentado como limitação conhecida em `src/orchestrator/index.ts`, não resolvido ainda.
+⚠️ **Classificação de efeitos ainda é heurística** (FASE 7), mas agora é fail-closed: intenção não reconhecida vira `UNKNOWN` e não chega ao provider. Os casos auditados de falso positivo (`Analise como implementar...`) e falso negativo (`Altere..., remova... e faça deploy`) têm testes de regressão.
 
 **FASE 5 — Contexto**: `projects/_template/` tem o esqueleto dos 5 arquivos (`PROJECT-CONTEXT.md`, `DATA-DICTIONARY.md`, `BUSINESS-RULES.md`, `ARCHITECTURE.md`, `AI-INSTRUCTIONS.md`) e `projects/README.md` documenta a convenção. Nenhum projeto real foi populado ainda — fazer isso exige conhecimento de negócio real, não deve ser inventado.
 
@@ -36,14 +38,14 @@ O orchestrator classifica a tarefa, resolve contexto, decide roteamento, monta o
 
 | Módulo | Responsabilidade |
 |---|---|
-| `taskClassifier.ts` | Classifica a tarefa em skills + sinais (investigação, decisão, implementação, Google Workspace) |
+| `taskClassifier.ts` | Classifica skills, sinais de roteamento e nível de efeito; `UNKNOWN` é fail-closed |
 | `contextResolver.ts` | Carrega só o contexto do projeto pedido (`projects/<project>/*.md`), nunca o repo inteiro |
 | `routingEngine.ts` | Matriz de roteamento (FASE 3) — decide provider primário, reviewer e fallback |
 | `taskPlanner.ts` | Decide `ONE_AGENT` vs `MULTI_AGENT` e a ordem da cadeia (FASE 4) |
 | `providerManager.ts` | Registro de providers (`AIProvider`) — o Router nunca importa um provider concreto direto |
-| `validationEngine.ts` | Roda a cadeia de revisão (MANUS→CHATGPT, CLAUDE→CHATGPT, GEMINI→CHATGPT — FASE 9) |
-| `evidenceManager.ts` | Monta o registro de evidência estruturado (FASE 8), sink plugável (hoje só em memória) |
-| `costController.ts` | `max_cost_per_task`, `require_confirmation_above` — sem billing complexo (FASE 16) |
+| `validationEngine.ts` | Retorna `APPROVED`/`REJECTED`/`NEEDS_HUMAN` e bloqueia autorrevisão |
+| `evidenceManager.ts` | Registra sucesso, bloqueio, skip, erro e fallback; sink padrão ainda em memória |
+| `costController.ts` | Reserva teto acumulado antes de cada chamada; custo desconhecido bloqueia |
 | `securityLayer.ts` | Modos `READ_ONLY`/`ASSISTED`/`AUTONOMOUS` + `DRY_RUN` (FASE 7) |
 | `observability.ts` | Log estruturado; métrica indisponível vira `"unknown"`, nunca é inventada (FASE 17) |
 | `index.ts` | `orchestrate()` — amarra tudo acima |
@@ -53,7 +55,7 @@ O orchestrator classifica a tarefa, resolve contexto, decide roteamento, monta o
 - **FASE 6** — `skills/` com `SKILL.md`/`ROUTING.md`/`VALIDATION.md`
 - **FASE 11** — persistência real em Supabase para `ai_tasks`/`ai_runs`/`ai_evidence` (ver seção "Reaproveitamento" abaixo — não desenhar do zero)
 - **FASE 13** — API HTTP (`POST /orchestrate`, `GET /tasks/:id`, `POST /tasks/:id/continue`) e integração com n8n
-- **FASE 14** — integração com a API oficial (não deprecated) do Manus
+- **FASE 14** — adapter v2 implementado; falta certificação contra chamada real do Manus
 - **FASE 19-21** — teste real ponta a ponta em `READ_ONLY`, `docs/` completos
 
 ## Como rodar
@@ -67,7 +69,7 @@ npm run build
 
 ## Modos de execução (FASE 7)
 
-Default é sempre `READ_ONLY` com `DRY_RUN=true` — ver `.env.example`. Ações de escrita exigem `ASSISTED` (aprovação explícita) ou `AUTONOMOUS` (autorizado previamente) para rodar de fato.
+Default é sempre `READ_ONLY` com `DRY_RUN=true` — ver `.env.example`. Só `READ` explícito passa nesse modo; `UNKNOWN` bloqueia. Provider capaz de efeitos externos é reavaliado como `EXTERNAL_ACTION`. Cada provider real também precisa declarar `*_MAX_COST_PER_CALL_USD`; sem teto, a chamada é bloqueada antes de gerar custo.
 
 ## Reaproveitamento conhecido (não redesenhar do zero)
 
