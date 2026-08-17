@@ -18,11 +18,11 @@ VERCEL            = DEPLOY
 
 Ver [DISCOVERY-REPORT.md](DISCOVERY-REPORT.md) para o levantamento que precedeu a implementação (arquitetura encontrada, prior art reaproveitável, gaps, riscos).
 
-## Status atual: core endurecido; persistência e API ainda pendentes
+## Status atual: core endurecido + FASE 11 implementada localmente; API ainda pendente
 
-O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION`/`UNKNOWN`), resolve contexto, decide roteamento, monta e encadeia o plano multi-agente, aplica segurança e reserva de custo **antes** da chamada, executa fallback controlado, valida sem autorrevisão e registra evidência inclusive para bloqueios/erros. `UNKNOWN`, custo sem teto configurado e pedido de aprovação de provider falham fechados.
+O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION`/`UNKNOWN`), resolve contexto, decide roteamento, monta e encadeia o plano multi-agente, aplica segurança e reserva de custo **antes** da chamada, executa fallback controlado, valida sem autorrevisão e registra tarefas, runs e evidências inclusive para bloqueios/erros. `UNKNOWN`, custo sem teto configurado e pedido de aprovação de provider falham fechados.
 
-**Testes locais:** 44 testes em 4 arquivos, além de `typecheck` e `build`. Continuam sendo testes locais/mockados; não substituem certificação real dos providers.
+**Testes locais:** 49 testes em 5 arquivos, além de `typecheck` e `build`. Continuam sendo testes locais/mockados; não substituem certificação real dos providers nem aplicação da migration em um projeto Supabase.
 
 **Único provider ativo hoje: Anthropic** (única chave de IA encontrada no ecossistema local — ver `DISCOVERY-REPORT.md`). OpenAI/Manus/Gemini estão implementados mas sem chave configurada.
 
@@ -44,16 +44,16 @@ O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION
 | `taskPlanner.ts` | Decide `ONE_AGENT` vs `MULTI_AGENT` e a ordem da cadeia (FASE 4) |
 | `providerManager.ts` | Registro de providers (`AIProvider`) — o Router nunca importa um provider concreto direto |
 | `validationEngine.ts` | Retorna `APPROVED`/`REJECTED`/`NEEDS_HUMAN` e bloqueia autorrevisão |
-| `evidenceManager.ts` | Registra sucesso, bloqueio, skip, erro e fallback; sink padrão ainda em memória |
+| `evidenceManager.ts` | Registra sucesso, bloqueio, skip, erro e fallback |
 | `costController.ts` | Reserva teto acumulado antes de cada chamada; custo desconhecido bloqueia |
 | `securityLayer.ts` | Modos `READ_ONLY`/`ASSISTED`/`AUTONOMOUS` + `DRY_RUN` (FASE 7) |
 | `observability.ts` | Log estruturado; métrica indisponível vira `"unknown"`, nunca é inventada (FASE 17) |
 | `index.ts` | `orchestrate()` — amarra tudo acima |
+| `src/persistence/` | Contrato, repositório em memória e adapter REST do Supabase (FASE 11) |
 
 ### O que falta (não implementado ainda)
 
 - **FASE 6** — `skills/` com `SKILL.md`/`ROUTING.md`/`VALIDATION.md`
-- **FASE 11** — persistência real e independente em Supabase para `ai_tasks`/`ai_runs`/`ai_evidence`
 - **FASE 13** — API HTTP (`POST /orchestrate`, `GET /tasks/:id`, `POST /tasks/:id/continue`) e integração com n8n
 - **FASE 14** — adapter v2 implementado; falta certificação contra chamada real do Manus
 - **FASE 19-21** — teste real ponta a ponta em `READ_ONLY`, `docs/` completos
@@ -70,6 +70,14 @@ npm run build
 ## Modos de execução (FASE 7)
 
 Default é sempre `READ_ONLY` com `DRY_RUN=true` — ver `.env.example`. Só `READ` explícito passa nesse modo; `UNKNOWN` bloqueia. Provider capaz de efeitos externos é reavaliado como `EXTERNAL_ACTION`. Cada provider real também precisa declarar `*_MAX_COST_PER_CALL_USD`; sem teto, a chamada é bloqueada antes de gerar custo.
+
+## Persistência Supabase (FASE 11)
+
+A migration local está em `supabase/migrations/202608170001_create_orchestrator_persistence.sql`. Ela cria somente `ai_tasks`, `ai_runs` e `ai_evidence`, com chaves estrangeiras, checks, índices e RLS. `anon` e `authenticated` não recebem acesso direto; o adapter foi desenhado para o backend com `service_role`.
+
+Quando `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estiverem configuradas juntas, `orchestrate()` ativa automaticamente o `SupabaseOrchestrationRepository`. Sem ambas, o fluxo continua sem persistência remota; para testes, injete `InMemoryOrchestrationRepository`. Configuração parcial falha antes de chamar qualquer IA.
+
+Esta branch apenas cria a migration: ela **não foi aplicada a nenhum Supabase remoto**. Aplicar a migration e executar um teste contratual real exigem autorização e ambiente do projeto correto.
 
 ## Reaproveitamento conhecido (não redesenhar do zero)
 
