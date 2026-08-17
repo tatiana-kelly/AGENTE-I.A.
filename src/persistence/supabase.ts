@@ -17,18 +17,58 @@ export interface SupabaseRepositoryConfig {
   fetchImpl?: FetchLike;
 }
 
+const providerNameSchema = z.enum(["openai", "manus", "anthropic", "gemini"]);
+const skillSchema = z.enum([
+  "business-analysis",
+  "data-analysis",
+  "research",
+  "architecture",
+  "programming",
+  "debugging",
+  "presentation",
+  "automation",
+  "financial-analysis",
+  "operational-analysis",
+]);
+const classificationSchema = z.object({
+  skills: z.array(skillSchema),
+  effectLevel: z.enum(["READ", "WRITE", "EXTERNAL_ACTION", "UNKNOWN"]),
+  requiresGoogleWorkspace: z.boolean(),
+  requiresInvestigation: z.boolean(),
+  requiresImplementation: z.boolean(),
+  requiresDecision: z.boolean(),
+  rationale: z.string(),
+});
+const routingSchema = z.object({
+  primary: providerNameSchema,
+  reviewer: providerNameSchema.optional(),
+  reason: z.string(),
+  confidence: z.number().min(0).max(1),
+  fallback: providerNameSchema.optional(),
+});
+const planSchema = z.object({
+  mode: z.enum(["ONE_AGENT", "MULTI_AGENT"]),
+  steps: z.array(z.object({ provider: providerNameSchema, purpose: z.string() })),
+});
+const validationSchema = z.object({
+  reviewed: z.boolean(),
+  status: z.enum(["APPROVED", "REJECTED", "NEEDS_HUMAN"]),
+  reviewer: providerNameSchema.optional(),
+  summary: z.string(),
+});
+
 const taskRowSchema = z.object({
   id: z.string().uuid(),
   task_text: z.string(),
   project: z.string().nullable(),
   status: z.enum(["received", "running", "completed", "awaiting_approval", "blocked", "failed"]),
-  classification: z.unknown(),
-  routing: z.unknown(),
-  plan: z.unknown(),
+  classification: classificationSchema,
+  routing: routingSchema,
+  plan: planSchema,
   execution_mode: z.enum(["READ_ONLY", "ASSISTED", "AUTONOMOUS"]),
   dry_run: z.boolean(),
   requires_approval: z.boolean(),
-  validation: z.unknown().nullable(),
+  validation: validationSchema.nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -37,8 +77,8 @@ const runRowSchema = z.object({
   id: z.string().uuid(),
   task_id: z.string().uuid(),
   step_index: z.number().int().nonnegative(),
-  provider: z.enum(["openai", "manus", "anthropic", "gemini"]),
-  fallback_for: z.enum(["openai", "manus", "anthropic", "gemini"]).nullable(),
+  provider: providerNameSchema,
+  fallback_for: providerNameSchema.nullable(),
   purpose: z.string(),
   status: z.enum(["running", "success", "error", "skipped", "blocked"]),
   output: z.string().nullable(),
@@ -51,7 +91,7 @@ const evidenceRowSchema = z.object({
   task_id: z.string().uuid(),
   run_id: z.string().uuid().nullable(),
   project: z.string().nullable(),
-  provider: z.enum(["openai", "manus", "anthropic", "gemini"]),
+  provider: providerNameSchema,
   model: z.string().nullable(),
   skill: z.string().nullable(),
   routing_reason: z.string(),
@@ -235,13 +275,13 @@ function fromTaskRow(row: z.infer<typeof taskRowSchema>): OrchestrationTaskRecor
     id: row.id,
     request: { task: row.task_text, project: row.project ?? undefined },
     status: row.status,
-    classification: row.classification as OrchestrationTaskRecord["classification"],
-    routing: row.routing as OrchestrationTaskRecord["routing"],
-    plan: row.plan as OrchestrationTaskRecord["plan"],
+    classification: row.classification,
+    routing: row.routing,
+    plan: row.plan,
     executionMode: row.execution_mode,
     dryRun: row.dry_run,
     requiresApproval: row.requires_approval,
-    validation: (row.validation ?? undefined) as OrchestrationTaskRecord["validation"],
+    validation: row.validation ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

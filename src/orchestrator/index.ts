@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { ProviderName, TaskResult } from "../providers/types.js";
+import { buildSupabaseRepositoryFromEnv, type OrchestrationRepository } from "../persistence/index.js";
 import { resolveContext } from "./contextResolver.js";
 import { classifyTask } from "./taskClassifier.js";
 import { routeTask } from "./routingEngine.js";
@@ -16,6 +18,7 @@ export interface OrchestrateOptions {
   projectsRoot?: string;
   providerManager?: ProviderManager;
   evidenceSink?: EvidenceSink;
+  repository?: OrchestrationRepository;
   observability?: Observability;
   costController?: CostController;
 }
@@ -35,7 +38,8 @@ export async function orchestrate(
 ): Promise<OrchestrationResult> {
   const security = options.security ?? loadExecutionModeFromEnv();
   const providerManager = options.providerManager ?? new ProviderManager();
-  const evidenceSink = options.evidenceSink ?? new InMemoryEvidenceSink();
+  const repository = options.repository ?? buildSupabaseRepositoryFromEnv();
+  const evidenceSink = combineEvidenceSinks(repository, options.evidenceSink);
   const observability = options.observability ?? new Observability();
   const costController = options.costController ?? new CostController(loadCostControlConfigFromEnv());
 
@@ -45,10 +49,12 @@ export async function orchestrate(
   const plan = planTask(classification, routing);
   const results: StepExecutionResult[] = [];
   const evidence: EvidenceRecord[] = [];
+  const taskId = randomUUID();
 
   const gate = evaluateExecution(security, classification.effectLevel);
 
   const base: OrchestrationResult = {
+    taskId,
     classification,
     context,
     routing,
@@ -60,14 +66,30 @@ export async function orchestrate(
     evidence,
   };
 
+  const createdAt = new Date().toISOString();
+  await repository?.createTask({
+    id: taskId,
+    request,
+    status: "received",
+    classification,
+    routing,
+    plan,
+    executionMode: security.mode,
+    dryRun: security.dryRun,
+    requiresApproval: base.requiresApproval,
+    createdAt,
+    updatedAt: createdAt,
+  });
+
   const recordNonSuccess = async (
-    taskId: string,
+    runId: string,
     provider: ProviderName,
     status: "error" | "skipped" | "blocked",
     reason: string,
   ): Promise<void> => {
     const record = buildEvidenceRecord({
       taskId,
+      runId,
       project: request.project,
       provider,
       skill: classification.skills[0],
@@ -84,28 +106,53 @@ export async function orchestrate(
 
   if (!gate.allowed) {
     observability.log({ task_id: request.task, status: "skipped", error: gate.reason });
-    await recordNonSuccess(`${Date.now()}-blocked`, routing.primary, "blocked", gate.reason);
+    const runId = randomUUID();
+    const now = new Date().toISOString();
+    await repository?.createRun({
+      id: runId,
+      taskId,
+      stepIndex: 0,
+      provider: routing.primary,
+      purpose: plan.steps[0]?.purpose ?? "Gate de segurança",
+      status: "blocked",
+      reason: gate.reason,
+      startedAt: now,
+      completedAt: now,
+    });
+    await recordNonSuccess(runId, routing.primary, "blocked", gate.reason);
+    await repository?.updateTask(taskId, {
+      status: "blocked",
+      requiresApproval: true,
+      updatedAt: new Date().toISOString(),
+    });
     return base;
   }
+
+  await repository?.updateTask(taskId, {
+    status: "running",
+    requiresApproval: base.requiresApproval,
+    updatedAt: new Date().toISOString(),
+  });
 
   let lastSuccessful: { provider: ProviderName; result: TaskResult } | undefined;
   let planCompleted = true;
   let reservedCostUsd = 0;
 
-  for (const step of plan.steps) {
+  for (const [stepIndex, step] of plan.steps.entries()) {
     const candidates = providerCandidates(step.provider, routing.primary, routing.fallback);
     const failedReasons: string[] = [];
     let stepCompleted = false;
 
     for (const candidate of candidates) {
-      const taskId = `${Date.now()}-${candidate}`;
+      const runId = randomUUID();
       const fallbackFor = candidate === step.provider ? undefined : step.provider;
 
       if (!providerManager.has(candidate)) {
         const reason = "Provider não registrado no Provider Manager.";
         results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason });
-        observability.log({ task_id: taskId, provider: candidate, status: "skipped", error: reason });
-        await recordNonSuccess(taskId, candidate, "skipped", reason);
+        observability.log({ task_id: runId, provider: candidate, status: "skipped", error: reason });
+        await persistFinishedRun(repository, { runId, taskId, stepIndex, provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason });
+        await recordNonSuccess(runId, candidate, "skipped", reason);
         failedReasons.push(`${candidate}: ${reason}`);
         continue;
       }
@@ -118,8 +165,9 @@ export async function orchestrate(
       );
       if (!providerGate.allowed) {
         results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason: providerGate.reason });
-        observability.log({ task_id: taskId, provider: candidate, status: "skipped", error: providerGate.reason });
-        await recordNonSuccess(taskId, candidate, "skipped", providerGate.reason);
+        observability.log({ task_id: runId, provider: candidate, status: "skipped", error: providerGate.reason });
+        await persistFinishedRun(repository, { runId, taskId, stepIndex, provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason: providerGate.reason });
+        await recordNonSuccess(runId, candidate, "skipped", providerGate.reason);
         base.requiresApproval ||= providerGate.requiresApproval;
         failedReasons.push(`${candidate}: ${providerGate.reason}`);
         continue;
@@ -132,18 +180,31 @@ export async function orchestrate(
       const cost = costController.evaluate(estimatedTaskCost);
       if (!cost.withinBudget || cost.requiresConfirmation) {
         results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason: cost.reason });
-        observability.log({ task_id: taskId, provider: candidate, status: "skipped", error: cost.reason });
-        await recordNonSuccess(taskId, candidate, "skipped", cost.reason);
+        observability.log({ task_id: runId, provider: candidate, status: "skipped", error: cost.reason });
+        await persistFinishedRun(repository, { runId, taskId, stepIndex, provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason: cost.reason });
+        await recordNonSuccess(runId, candidate, "skipped", cost.reason);
         base.requiresApproval = true;
         failedReasons.push(`${candidate}: ${cost.reason}`);
         continue;
       }
       reservedCostUsd = estimatedTaskCost as number;
 
+      const runStartedAt = new Date().toISOString();
+      await repository?.createRun({
+        id: runId,
+        taskId,
+        stepIndex,
+        provider: candidate,
+        fallbackFor,
+        purpose: step.purpose,
+        status: "running",
+        startedAt: runStartedAt,
+      });
       const start = performance.now();
+      let result: TaskResult;
       try {
-        const result = await providerManager.call(candidate, {
-          taskId,
+        result = await providerManager.call(candidate, {
+          taskId: runId,
           prompt: buildStepPrompt(request.task, step.purpose, context.loaded, results),
           project: request.project,
           context: {
@@ -152,42 +213,54 @@ export async function orchestrate(
           },
           skill: classification.skills[0],
         });
-        const durationMs = performance.now() - start;
-
-        results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "success", output: result.output });
-        observability.log({ task_id: taskId, provider: candidate, status: "success", duration_ms: Math.round(durationMs) });
-
-        const record = buildEvidenceRecord({
-          taskId,
-          project: request.project,
-          provider: candidate,
-          skill: classification.skills[0],
-          routingReason: routing.reason,
-          result,
-          confidence: routing.confidence,
-          timestamp: new Date().toISOString(),
-          limitations: `Custo máximo reservado acumulado: US$ ${reservedCostUsd.toFixed(2)}.`,
-          fallbackTriggered: fallbackFor !== undefined,
-          fallbackReason: fallbackFor === undefined ? undefined : failedReasons.join(" | "),
-        });
-        await evidenceSink.record(record);
-        evidence.push(record);
-
-        lastSuccessful = { provider: candidate, result };
-        stepCompleted = true;
-        break;
       } catch (error) {
         const durationMs = performance.now() - start;
         const message = error instanceof Error ? error.message : String(error);
         results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "error", reason: message });
-        observability.log({ task_id: taskId, provider: candidate, status: "error", duration_ms: Math.round(durationMs), error: message });
-        await recordNonSuccess(taskId, candidate, "error", message);
+        observability.log({ task_id: runId, provider: candidate, status: "error", duration_ms: Math.round(durationMs), error: message });
+        await repository?.updateRun(runId, {
+          status: "error",
+          reason: message,
+          completedAt: new Date().toISOString(),
+        });
+        await recordNonSuccess(runId, candidate, "error", message);
         failedReasons.push(`${candidate}: ${message}`);
         if (requiresExplicitApproval(error)) {
           base.requiresApproval = true;
           break;
         }
+        continue;
       }
+
+      const durationMs = performance.now() - start;
+      results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "success", output: result.output });
+      observability.log({ task_id: runId, provider: candidate, status: "success", duration_ms: Math.round(durationMs) });
+      await repository?.updateRun(runId, {
+        status: "success",
+        output: result.output,
+        completedAt: new Date().toISOString(),
+      });
+
+      const record = buildEvidenceRecord({
+        taskId,
+        runId,
+        project: request.project,
+        provider: candidate,
+        skill: classification.skills[0],
+        routingReason: routing.reason,
+        result,
+        confidence: routing.confidence,
+        timestamp: new Date().toISOString(),
+        limitations: `Custo máximo reservado acumulado: US$ ${reservedCostUsd.toFixed(2)}.`,
+        fallbackTriggered: fallbackFor !== undefined,
+        fallbackReason: fallbackFor === undefined ? undefined : failedReasons.join(" | "),
+      });
+      await evidenceSink.record(record);
+      evidence.push(record);
+
+      lastSuccessful = { provider: candidate, result };
+      stepCompleted = true;
+      break;
     }
 
     if (!stepCompleted) {
@@ -198,11 +271,13 @@ export async function orchestrate(
 
   let validation: OrchestrationResult["validation"];
   if (lastSuccessful && planCompleted) {
+    const reviewRunId = randomUUID();
+    let reviewStarted = false;
     const outcome = await validateResult(
       providerManager,
       routing,
       {
-        taskId: `${Date.now()}-review`,
+        taskId: reviewRunId,
         prompt: request.task,
         project: request.project,
         context: { projectFiles: context.loaded, previousResults: successfulOutputs(results) },
@@ -211,6 +286,18 @@ export async function orchestrate(
       lastSuccessful.result,
       {
         artifactProvider: lastSuccessful.provider,
+        onReviewerCallStart: async (reviewer) => {
+          reviewStarted = true;
+          await repository?.createRun({
+            id: reviewRunId,
+            taskId,
+            stepIndex: plan.steps.length,
+            provider: reviewer,
+            purpose: `Revisão do resultado de ${lastSuccessful.provider}`,
+            status: "running",
+            startedAt: new Date().toISOString(),
+          });
+        },
         authorizeReviewer: (reviewer) => {
           const capabilities = providerManager.capabilities(reviewer);
           const reviewerGate = evaluateExecution(
@@ -242,9 +329,32 @@ export async function orchestrate(
       reviewOutput: outcome.reviewResult?.output,
     };
     base.requiresApproval ||= outcome.status === "NEEDS_HUMAN" || outcome.status === "REJECTED";
+    if (outcome.reviewer) {
+      const reviewStatus = outcome.reviewed ? "success" : outcome.summary.startsWith("Falha") ? "error" : "skipped";
+      if (reviewStarted) {
+        await repository?.updateRun(reviewRunId, {
+          status: reviewStatus,
+          output: outcome.reviewResult?.output,
+          reason: outcome.reviewed ? undefined : outcome.summary,
+          completedAt: new Date().toISOString(),
+        });
+      } else {
+        await persistFinishedRun(repository, {
+          runId: reviewRunId,
+          taskId,
+          stepIndex: plan.steps.length,
+          provider: outcome.reviewer,
+          purpose: `Revisão do resultado de ${lastSuccessful.provider}`,
+          status: reviewStatus,
+          output: outcome.reviewResult?.output,
+          reason: outcome.reviewed ? undefined : outcome.summary,
+        });
+      }
+    }
     if (outcome.reviewed && outcome.reviewResult) {
       const record = buildEvidenceRecord({
-        taskId: `${Date.now()}-review`,
+        taskId,
+        runId: reviewRunId,
         project: request.project,
         provider: outcome.reviewer as ProviderName,
         skill: classification.skills[0],
@@ -258,7 +368,75 @@ export async function orchestrate(
     }
   }
 
+  const finalStatus = determineFinalTaskStatus(planCompleted, results, base.requiresApproval);
+  await repository?.updateTask(taskId, {
+    status: finalStatus,
+    requiresApproval: base.requiresApproval,
+    validation: validation
+      ? {
+          reviewed: validation.reviewed,
+          status: validation.status,
+          reviewer: validation.reviewer,
+          summary: validation.summary,
+        }
+      : undefined,
+    updatedAt: new Date().toISOString(),
+  });
   return { ...base, results, evidence, validation };
+}
+
+function determineFinalTaskStatus(
+  planCompleted: boolean,
+  results: StepExecutionResult[],
+  requiresApproval: boolean,
+): "completed" | "awaiting_approval" | "failed" {
+  if (requiresApproval) return "awaiting_approval";
+  if (!planCompleted || !results.some((result) => result.status === "success")) return "failed";
+  return "completed";
+}
+
+function combineEvidenceSinks(
+  repository: OrchestrationRepository | undefined,
+  explicitSink: EvidenceSink | undefined,
+): EvidenceSink {
+  if (!repository) return explicitSink ?? new InMemoryEvidenceSink();
+  if (!explicitSink || explicitSink === repository) return repository;
+  return {
+    async record(record: EvidenceRecord): Promise<void> {
+      await repository.record(record);
+      await explicitSink.record(record);
+    },
+  };
+}
+
+async function persistFinishedRun(
+  repository: OrchestrationRepository | undefined,
+  params: {
+    runId: string;
+    taskId: string;
+    stepIndex: number;
+    provider: ProviderName;
+    fallbackFor?: ProviderName;
+    purpose: string;
+    status: "success" | "error" | "skipped" | "blocked";
+    output?: string;
+    reason?: string;
+  },
+): Promise<void> {
+  const now = new Date().toISOString();
+  await repository?.createRun({
+    id: params.runId,
+    taskId: params.taskId,
+    stepIndex: params.stepIndex,
+    provider: params.provider,
+    fallbackFor: params.fallbackFor,
+    purpose: params.purpose,
+    status: params.status,
+    output: params.output,
+    reason: params.reason,
+    startedAt: now,
+    completedAt: now,
+  });
 }
 
 function providerCandidates(
@@ -324,3 +502,4 @@ export { buildEvidenceRecord, InMemoryEvidenceSink } from "./evidenceManager.js"
 export { CostController, loadCostControlConfigFromEnv } from "./costController.js";
 export { evaluateExecution, loadExecutionModeFromEnv } from "./securityLayer.js";
 export { Observability, ConsoleLogSink } from "./observability.js";
+export * from "../persistence/index.js";

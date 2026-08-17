@@ -11,6 +11,7 @@ const reviewSchema = z.object({
 export interface ValidationContext {
   artifactProvider: ProviderName;
   authorizeReviewer?: (reviewer: ProviderName) => { allowed: boolean; reason: string };
+  onReviewerCallStart?: (reviewer: ProviderName) => Promise<void>;
 }
 
 export interface ValidationOutcome {
@@ -84,6 +85,7 @@ export async function validateResult(
     };
   }
 
+  await context.onReviewerCallStart?.(routing.reviewer);
   try {
     const reviewResult = await providerManager.call(routing.reviewer, {
       taskId: taskInput.taskId,
