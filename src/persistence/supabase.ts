@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { EvidenceRecord } from "../orchestrator/types.js";
+import { projectManifestSchema } from "../projects/manifest.js";
 import type {
   OrchestrationRepository,
   OrchestrationRunRecord,
@@ -7,6 +8,8 @@ import type {
   OrchestrationTaskRecord,
   OrchestrationTaskUpdate,
   PersistedTaskSnapshot,
+  ProjectPermissionRecord,
+  ProjectRecord,
 } from "./types.js";
 
 type FetchLike = typeof fetch;
@@ -115,6 +118,27 @@ const evidenceRowSchema = z.object({
   fallback_reason: z.string().nullable(),
 });
 
+const projectRowSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  repository: z.string(),
+  default_branch: z.string(),
+  manifest: z.unknown(),
+  context_files: z.record(z.string()),
+  missing_context_files: z.array(z.string()),
+  context_sha256: z.string(),
+  active: z.boolean(),
+  updated_at: z.string(),
+});
+
+const permissionRowSchema = z.object({
+  project_id: z.string(),
+  principal_type: z.enum(["user", "service", "agent"]),
+  principal_id: z.string(),
+  capability: z.enum(["read_context", "audit", "execute_assisted", "approve", "admin"]),
+  created_at: z.string(),
+});
+
 export class SupabaseOrchestrationRepository implements OrchestrationRepository {
   private readonly baseUrl: string;
   private readonly serviceRoleKey: string;
@@ -189,6 +213,55 @@ export class SupabaseOrchestrationRepository implements OrchestrationRepository 
       runs: z.array(runRowSchema).parse(runRows).map(fromRunRow),
       evidence: z.array(evidenceRowSchema).parse(evidenceRows).map(fromEvidenceRow),
     };
+  }
+
+  async upsertProject(project: ProjectRecord): Promise<void> {
+    await this.request("ai_projects?on_conflict=id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(toProjectRow(project)),
+    });
+  }
+
+  async getProject(projectId: string): Promise<ProjectRecord | undefined> {
+    const rows = z.array(projectRowSchema).parse(
+      await this.requestJson(`ai_projects?id=eq.${encodeURIComponent(projectId)}&select=*`),
+    );
+    return rows[0] ? fromProjectRow(rows[0]) : undefined;
+  }
+
+  async listProjects(): Promise<ProjectRecord[]> {
+    const rows = z.array(projectRowSchema).parse(await this.requestJson("ai_projects?active=eq.true&select=*&order=id.asc"));
+    return rows.map(fromProjectRow);
+  }
+
+  async upsertProjectPermission(permission: ProjectPermissionRecord): Promise<void> {
+    await this.request("ai_project_permissions?on_conflict=project_id,principal_type,principal_id,capability", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({
+        project_id: permission.projectId,
+        principal_type: permission.principalType,
+        principal_id: permission.principalId,
+        capability: permission.capability,
+        created_at: permission.createdAt,
+      }),
+    });
+  }
+
+  async listProjectPermissions(projectId: string): Promise<ProjectPermissionRecord[]> {
+    const rows = z.array(permissionRowSchema).parse(
+      await this.requestJson(
+        `ai_project_permissions?project_id=eq.${encodeURIComponent(projectId)}&select=*&order=principal_type.asc,principal_id.asc`,
+      ),
+    );
+    return rows.map((row) => ({
+      projectId: row.project_id,
+      principalType: row.principal_type,
+      principalId: row.principal_id,
+      capability: row.capability,
+      createdAt: row.created_at,
+    }));
   }
 
   private async request(path: string, init: RequestInit): Promise<Response> {
@@ -347,5 +420,35 @@ function fromEvidenceRow(row: z.infer<typeof evidenceRowSchema>): EvidenceRecord
     limitations: row.limitations ?? undefined,
     fallback_triggered: row.fallback_triggered,
     fallback_reason: row.fallback_reason ?? undefined,
+  };
+}
+
+function toProjectRow(project: ProjectRecord): Record<string, unknown> {
+  return {
+    id: project.id,
+    name: project.name,
+    repository: project.repository,
+    default_branch: project.defaultBranch,
+    manifest: project.manifest,
+    context_files: project.contextFiles,
+    missing_context_files: project.missingContextFiles,
+    context_sha256: project.contextSha256,
+    active: project.active,
+    updated_at: project.updatedAt,
+  };
+}
+
+function fromProjectRow(row: z.infer<typeof projectRowSchema>): ProjectRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    repository: row.repository,
+    defaultBranch: row.default_branch,
+    manifest: projectManifestSchema.parse(row.manifest),
+    contextFiles: row.context_files,
+    missingContextFiles: row.missing_context_files,
+    contextSha256: row.context_sha256,
+    active: row.active,
+    updatedAt: row.updated_at,
   };
 }

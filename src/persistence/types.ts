@@ -1,4 +1,5 @@
 import type { ProviderName } from "../providers/types.js";
+import type { ProjectManifest } from "../projects/manifest.js";
 import type {
   ClassificationResult,
   EvidenceRecord,
@@ -84,6 +85,30 @@ export interface PersistedTaskSnapshot {
   evidence: EvidenceRecord[];
 }
 
+export interface ProjectRecord {
+  id: string;
+  name: string;
+  repository: string;
+  defaultBranch: string;
+  manifest: ProjectManifest;
+  contextFiles: Record<string, string>;
+  missingContextFiles: string[];
+  contextSha256: string;
+  active: boolean;
+  updatedAt: string;
+}
+
+export type ProjectPrincipalType = "user" | "service" | "agent";
+export type ProjectCapability = "read_context" | "audit" | "execute_assisted" | "approve" | "admin";
+
+export interface ProjectPermissionRecord {
+  projectId: string;
+  principalType: ProjectPrincipalType;
+  principalId: string;
+  capability: ProjectCapability;
+  createdAt: string;
+}
+
 /** Persistence boundary owned exclusively by the AI Orchestrator. */
 export interface OrchestrationRepository {
   createTask(task: OrchestrationTaskRecord): Promise<void>;
@@ -94,4 +119,9 @@ export interface OrchestrationRepository {
   updateRun(runId: string, update: OrchestrationRunUpdate): Promise<void>;
   record(evidence: EvidenceRecord): Promise<void>;
   getTask(taskId: string): Promise<PersistedTaskSnapshot | undefined>;
+  upsertProject(project: ProjectRecord): Promise<void>;
+  getProject(projectId: string): Promise<ProjectRecord | undefined>;
+  listProjects(): Promise<ProjectRecord[]>;
+  upsertProjectPermission(permission: ProjectPermissionRecord): Promise<void>;
+  listProjectPermissions(projectId: string): Promise<ProjectPermissionRecord[]>;
 }

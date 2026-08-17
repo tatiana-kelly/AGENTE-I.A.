@@ -6,12 +6,16 @@ import type {
   OrchestrationTaskRecord,
   OrchestrationTaskUpdate,
   PersistedTaskSnapshot,
+  ProjectPermissionRecord,
+  ProjectRecord,
 } from "./types.js";
 
 export class InMemoryOrchestrationRepository implements OrchestrationRepository {
   private readonly tasks = new Map<string, OrchestrationTaskRecord>();
   private readonly runs = new Map<string, OrchestrationRunRecord>();
   private readonly evidence: EvidenceRecord[] = [];
+  private readonly projects = new Map<string, ProjectRecord>();
+  private readonly projectPermissions = new Map<string, ProjectPermissionRecord>();
 
   async createTask(task: OrchestrationTaskRecord): Promise<void> {
     if (this.tasks.has(task.id)) throw new Error(`Task ${task.id} já existe.`);
@@ -57,4 +61,31 @@ export class InMemoryOrchestrationRepository implements OrchestrationRepository 
       evidence: this.evidence.filter((record) => record.task_id === taskId),
     });
   }
+
+  async upsertProject(project: ProjectRecord): Promise<void> {
+    this.projects.set(project.id, structuredClone(project));
+  }
+
+  async getProject(projectId: string): Promise<ProjectRecord | undefined> {
+    const project = this.projects.get(projectId);
+    return project ? structuredClone(project) : undefined;
+  }
+
+  async listProjects(): Promise<ProjectRecord[]> {
+    return structuredClone([...this.projects.values()].sort((left, right) => left.id.localeCompare(right.id)));
+  }
+
+  async upsertProjectPermission(permission: ProjectPermissionRecord): Promise<void> {
+    this.projectPermissions.set(permissionKey(permission), structuredClone(permission));
+  }
+
+  async listProjectPermissions(projectId: string): Promise<ProjectPermissionRecord[]> {
+    return structuredClone(
+      [...this.projectPermissions.values()].filter((permission) => permission.projectId === projectId),
+    );
+  }
+}
+
+function permissionKey(permission: ProjectPermissionRecord): string {
+  return [permission.projectId, permission.principalType, permission.principalId, permission.capability].join(":");
 }
