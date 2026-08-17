@@ -18,11 +18,11 @@ VERCEL            = DEPLOY
 
 Ver [DISCOVERY-REPORT.md](DISCOVERY-REPORT.md) para o levantamento que precedeu a implementação (arquitetura encontrada, prior art reaproveitável, gaps, riscos).
 
-## Status atual: core endurecido + FASE 11 + API da FASE 13 implementadas localmente
+## Status atual: core + persistência + API + padrão de projetos/MCP implementados localmente
 
 O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION`/`UNKNOWN`), resolve contexto, decide roteamento, monta e encadeia o plano multi-agente, aplica segurança e reserva de custo **antes** da chamada, executa fallback controlado, valida sem autorrevisão e registra tarefas, runs e evidências inclusive para bloqueios/erros. `UNKNOWN`, custo sem teto configurado e pedido de aprovação de provider falham fechados.
 
-**Testes locais:** 54 testes em 6 arquivos, além de `typecheck` e `build`. Continuam sendo testes locais/mockados; não substituem certificação real dos providers, aplicação das migrations nem validação com n8n.
+**Testes locais:** 60 testes em 8 arquivos, além de `typecheck` e `build`. Continuam sendo testes locais/mockados; não substituem certificação real dos providers, aplicação das migrations nem validação com n8n/Cowork/Claude Code/Codex.
 
 **Único provider ativo hoje: Anthropic** (única chave de IA encontrada no ecossistema local — ver `DISCOVERY-REPORT.md`). OpenAI/Manus/Gemini estão implementados mas sem chave configurada.
 
@@ -32,7 +32,7 @@ O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION
 
 ⚠️ **Classificação de efeitos ainda é heurística** (FASE 7), mas agora é fail-closed: intenção não reconhecida vira `UNKNOWN` e não chega ao provider. Os casos auditados de falso positivo (`Analise como implementar...`) e falso negativo (`Altere..., remova... e faça deploy`) têm testes de regressão.
 
-**FASE 5 — Contexto**: `projects/_template/` tem o esqueleto dos 5 arquivos (`PROJECT-CONTEXT.md`, `DATA-DICTIONARY.md`, `BUSINESS-RULES.md`, `ARCHITECTURE.md`, `AI-INSTRUCTIONS.md`) e `projects/README.md` documenta a convenção. Nenhum projeto real foi populado ainda — fazer isso exige conhecimento de negócio real, não deve ser inventado.
+**Contexto de projetos**: cada repositório integrado usa `AI-PROJECT.yaml`, `.ai/`, `AGENTS.md`, `CLAUDE.md` e a skill `sal-project`. O registro persiste somente o snapshot autorizado e seu hash; não concede acesso automático ao repositório inteiro.
 
 ### Módulos (`src/orchestrator/`)
 
@@ -51,11 +51,14 @@ O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION
 | `index.ts` | `orchestrate()` — amarra tudo acima |
 | `src/persistence/` | Contrato, repositório em memória e adapter REST do Supabase (FASE 11) |
 | `src/api/` | API HTTP autenticada e servidor Node para integração com n8n (FASE 13) |
+| `src/projects/` | Validador do manifesto, onboarding, snapshot e autorização por projeto |
+| `src/mcp/` | MCP stdio somente leitura para clientes locais autorizados |
 
 ### O que falta (não implementado ainda)
 
-- **FASE 6** — `skills/` com `SKILL.md`/`ROUTING.md`/`VALIDATION.md`
+- **FASE 6** — ampliar o catálogo além da skill inicial `sal-project`
 - **FASE 13 (validação externa)** — conectar a API ao n8n real e testar autenticação/continuação ponta a ponta
+- **MCP remoto** — adicionar transporte HTTP com autenticação OAuth; o transporte atual é local/stdio
 - **FASE 14** — adapter v2 implementado; falta certificação contra chamada real do Manus
 - **FASE 19-21** — teste real ponta a ponta em `READ_ONLY`, `docs/` completos
 
@@ -69,13 +72,43 @@ npm run build
 npm start
 ```
 
+## Integrar um projeto
+
+O onboarding cria somente arquivos ausentes e nunca sobrescreve instruções existentes:
+
+```bash
+npm run project:init -- C:\github\meu-projeto --id meu-projeto --name "Meu Projeto" --repository empresa/meu-projeto
+npm run project:validate -- C:\github\meu-projeto
+```
+
+Depois de revisar e preencher o contexto real, sincronize o snapshot no Supabase exclusivo do Orchestrator e conceda somente a capacidade necessária:
+
+```bash
+npm run project:sync -- C:\github\meu-projeto
+npm run project:grant -- meu-projeto --type agent --principal claude-code --capability read_context
+npm run project:grant -- meu-projeto --type agent --principal codex --capability read_context
+```
+
+O manifesto nunca contém credenciais. `AGENTS.md` é a instrução compartilhada; `CLAUDE.md` importa `@AGENTS.md` e acrescenta apenas regras específicas do Claude.
+
+## MCP local somente leitura
+
+Configure `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `MCP_PRINCIPAL_TYPE` e `MCP_PRINCIPAL_ID` no ambiente seguro do processo e execute:
+
+```bash
+npm run build
+npm run mcp:start
+```
+
+Ferramentas expostas: `projects_list`, `projects_get_context` e `tasks_get`. Todas filtram por `ai_project_permissions`; projeto não autorizado é omitido sem confirmar sua existência. O processo MCP possui a chave de backend, mas ela não é devolvida ao agente. Para Cowork remoto/serviços compartilhados, não exponha stdio nem uma chave estática: aguarde o transporte HTTP com OAuth.
+
 ## Modos de execução (FASE 7)
 
 Default é sempre `READ_ONLY` com `DRY_RUN=true` — ver `.env.example`. Só `READ` explícito passa nesse modo; `UNKNOWN` bloqueia. Provider capaz de efeitos externos é reavaliado como `EXTERNAL_ACTION`. Cada provider real também precisa declarar `*_MAX_COST_PER_CALL_USD`; sem teto, a chamada é bloqueada antes de gerar custo.
 
 ## Persistência Supabase (FASE 11)
 
-As migrations locais estão em `supabase/migrations/`. Elas criam somente `ai_tasks`, `ai_runs` e `ai_evidence`, com chaves estrangeiras, checks, índices, continuidade auditável e RLS. `anon` e `authenticated` não recebem acesso direto; o adapter foi desenhado para o backend com `service_role`.
+As migrations locais estão em `supabase/migrations/`. Elas criam `ai_tasks`, `ai_runs`, `ai_evidence`, `ai_projects` e `ai_project_permissions`, com chaves estrangeiras, checks, índices, continuidade auditável e RLS. `anon` e `authenticated` não recebem acesso direto; o adapter foi desenhado para o backend com `service_role`.
 
 Quando `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estiverem configuradas juntas, `orchestrate()` ativa automaticamente o `SupabaseOrchestrationRepository`. Sem ambas, o fluxo continua sem persistência remota; para testes, injete `InMemoryOrchestrationRepository`. Configuração parcial falha antes de chamar qualquer IA.
 
