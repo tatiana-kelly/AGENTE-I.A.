@@ -5,6 +5,8 @@ import { InMemoryEvidenceSink } from "../src/orchestrator/evidenceManager.js";
 import type { AIProvider, HealthStatus, TaskInput, TaskResult } from "../src/providers/types.js";
 
 class FakeProvider implements AIProvider {
+  readonly capabilities = { mayProduceExternalEffects: false } as const;
+
   constructor(
     readonly name: AIProvider["name"],
     private readonly output: string,
@@ -17,6 +19,10 @@ class FakeProvider implements AIProvider {
   async healthCheck(): Promise<HealthStatus> {
     return { healthy: true, checkedAt: new Date().toISOString() };
   }
+}
+
+class AgenticFakeProvider extends FakeProvider {
+  override readonly capabilities = { mayProduceExternalEffects: true } as const;
 }
 
 describe("orchestrate() — execução ponta a ponta", () => {
@@ -48,6 +54,46 @@ describe("orchestrate() — execução ponta a ponta", () => {
 
     expect(result.requiresApproval).toBe(true);
     expect(result.results).toEqual([]);
+    expect(result.evidence).toEqual([]);
+  });
+
+  it("bloqueia falso negativo de escrita em READ_ONLY antes de chamar provider", async () => {
+    const manager = new ProviderManager();
+    const provider = new FakeProvider("manus", "não deveria rodar");
+    manager.register(provider);
+
+    const result = await orchestrate(
+      { task: "Altere o arquivo de configuração, remova a regra antiga e faça o deploy." },
+      { security: { mode: "READ_ONLY", dryRun: true }, providerManager: manager },
+    );
+
+    expect(result.classification.effectLevel).toBe("EXTERNAL_ACTION");
+    expect(result.requiresApproval).toBe(true);
+    expect(result.results).toEqual([]);
+  });
+
+  it("bloqueia efeito desconhecido por padrão, inclusive em AUTONOMOUS", async () => {
+    const result = await orchestrate(
+      { task: "Cuide disso para mim." },
+      { security: { mode: "AUTONOMOUS", dryRun: false } },
+    );
+
+    expect(result.classification.effectLevel).toBe("UNKNOWN");
+    expect(result.requiresApproval).toBe(true);
+    expect(result.results).toEqual([]);
+  });
+
+  it("bloqueia provider agente em READ_ONLY mesmo quando o prompt parece leitura", async () => {
+    const manager = new ProviderManager();
+    manager.register(new AgenticFakeProvider("manus", "não deveria rodar"));
+
+    const result = await orchestrate(
+      { task: "Investigue profundamente esse problema." },
+      { security: { mode: "READ_ONLY", dryRun: true }, providerManager: manager },
+    );
+
+    expect(result.results[0]).toMatchObject({ provider: "manus", status: "skipped" });
+    expect(result.results[0]?.reason).toMatch(/READ_ONLY/);
     expect(result.evidence).toEqual([]);
   });
 

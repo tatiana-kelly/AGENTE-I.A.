@@ -62,6 +62,7 @@ interface ListMessagesResponse {
  */
 export class ManusProvider implements AIProvider {
   readonly name = "manus" as const;
+  readonly capabilities = { mayProduceExternalEffects: true } as const;
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly agentProfile: string;

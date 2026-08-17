@@ -29,6 +29,7 @@ interface ModelsListResponse {
  */
 export class GeminiProvider implements AIProvider {
   readonly name = "gemini" as const;
+  readonly capabilities = { mayProduceExternalEffects: false } as const;
   private readonly apiKey: string;
   private readonly model: string;
   private readonly baseUrl: string;

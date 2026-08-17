@@ -28,6 +28,7 @@ interface ModelsListResponse {
  */
 export class OpenAIProvider implements AIProvider {
   readonly name = "openai" as const;
+  readonly capabilities = { mayProduceExternalEffects: false } as const;
   private readonly apiKey: string;
   private readonly model: string;
   private readonly baseUrl: string;

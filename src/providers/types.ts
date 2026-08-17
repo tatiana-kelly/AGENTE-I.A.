@@ -29,8 +29,14 @@ export interface HealthStatus {
   checkedAt: string;
 }
 
+export interface ProviderCapabilities {
+  /** True when the provider can invoke remote tools or affect external systems. */
+  mayProduceExternalEffects: boolean;
+}
+
 export interface AIProvider {
   readonly name: ProviderName;
+  readonly capabilities: ProviderCapabilities;
   analyze(input: TaskInput): Promise<TaskResult>;
   healthCheck(): Promise<HealthStatus>;
 }

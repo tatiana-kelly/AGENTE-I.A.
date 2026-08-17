@@ -17,11 +17,18 @@ export type SkillCategory =
 /** FASE 7. Default is always READ_ONLY. */
 export type ExecutionMode = "READ_ONLY" | "ASSISTED" | "AUTONOMOUS";
 
+/**
+ * Side-effect intent inferred before any provider call. UNKNOWN is deliberately
+ * fail-closed: an unclassified task must not be treated as read-only.
+ */
+export type EffectLevel = "READ" | "WRITE" | "EXTERNAL_ACTION" | "UNKNOWN";
+
 /** FASE 4. */
 export type AgentMode = "ONE_AGENT" | "MULTI_AGENT";
 
 export interface ClassificationResult {
   skills: SkillCategory[];
+  effectLevel: EffectLevel;
   requiresGoogleWorkspace: boolean;
   requiresInvestigation: boolean;
   requiresImplementation: boolean;

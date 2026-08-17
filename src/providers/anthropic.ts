@@ -31,6 +31,7 @@ interface ModelsListResponse {
  */
 export class AnthropicProvider implements AIProvider {
   readonly name = "anthropic" as const;
+  readonly capabilities = { mayProduceExternalEffects: false } as const;
   private readonly apiKey: string;
   private readonly model: string;
   private readonly baseUrl: string;

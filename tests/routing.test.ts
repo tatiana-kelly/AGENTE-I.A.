@@ -71,3 +71,25 @@ describe("Definição de sucesso do PRP-003", () => {
     expect(decide("Valide se a solução faz sentido para o negócio.").routing.primary).toBe("openai");
   });
 });
+
+describe("classificação de efeitos — fail-closed", () => {
+  it("classifica análise sobre implementação como leitura, sem falso positivo de escrita", () => {
+    const { classification } = decide("Analise como implementar esta arquitetura e indique os riscos.");
+    expect(classification.effectLevel).toBe("READ");
+    expect(classification.requiresImplementation).toBe(false);
+  });
+
+  it("classifica alteração/deploy como ação externa", () => {
+    const { classification } = decide("Altere o arquivo de configuração, remova a regra antiga e faça o deploy.");
+    expect(classification.effectLevel).toBe("EXTERNAL_ACTION");
+  });
+
+  it("classifica envio de email e atualização de planilha como efeitos bloqueáveis", () => {
+    expect(decide("Envie o relatório por email.").classification.effectLevel).toBe("EXTERNAL_ACTION");
+    expect(decide("Atualize a planilha de custos.").classification.effectLevel).toBe("WRITE");
+  });
+
+  it("trata tarefa sem intenção reconhecida como UNKNOWN", () => {
+    expect(decide("Cuide disso para mim.").classification.effectLevel).toBe("UNKNOWN");
+  });
+});

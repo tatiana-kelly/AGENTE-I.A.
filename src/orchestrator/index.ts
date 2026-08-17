@@ -25,15 +25,9 @@ export interface OrchestrateOptions {
  * segurança permitir) INVESTIGAR/CONSTRUIR via ProviderManager → VALIDAR
  * via validationEngine → REGISTRAR via evidenceManager/Observability.
  *
- * Ação de escrita vs. leitura (FASE 7): usamos
- * `classification.requiresImplementation` como sinal — uma tarefa que
- * pede implementação/mudança de código é tratada como ação de escrita
- * (precisa de aprovação fora de AUTONOMOUS); investigação, decisão e
- * análise são tratadas como leitura (sempre permitidas, mesmo em
- * READ_ONLY). É uma heurística documentada, não uma garantia absoluta —
- * se um provider futuramente reportar side-effects reais (ex.: Manus
- * agindo sobre ferramentas), esse sinal deve vir do próprio `TaskResult`,
- * não só da classificação do prompt.
+ * Efeitos de execução (FASE 7): a classificação separa READ, WRITE,
+ * EXTERNAL_ACTION e UNKNOWN. Somente READ passa em READ_ONLY; UNKNOWN é
+ * bloqueado por padrão. O gate roda antes de qualquer provider.
  */
 export async function orchestrate(
   request: OrchestrationRequest,
@@ -50,8 +44,7 @@ export async function orchestrate(
   const routing = routeTask(classification);
   const plan = planTask(classification, routing);
 
-  const isWriteAction = classification.requiresImplementation;
-  const gate = evaluateExecution(security, isWriteAction);
+  const gate = evaluateExecution(security, classification.effectLevel);
 
   const base: OrchestrationResult = {
     classification,
@@ -80,6 +73,17 @@ export async function orchestrate(
     if (!providerManager.has(step.provider)) {
       results.push({ provider: step.provider, purpose: step.purpose, status: "skipped", reason: "Provider não registrado no Provider Manager." });
       observability.log({ task_id: taskId, provider: step.provider, status: "skipped", error: "provider não registrado" });
+      continue;
+    }
+
+    const providerGate = evaluateExecution(
+      security,
+      classification.effectLevel,
+      providerManager.capabilities(step.provider).mayProduceExternalEffects,
+    );
+    if (!providerGate.allowed) {
+      results.push({ provider: step.provider, purpose: step.purpose, status: "skipped", reason: providerGate.reason });
+      observability.log({ task_id: taskId, provider: step.provider, status: "skipped", error: providerGate.reason });
       continue;
     }
 
