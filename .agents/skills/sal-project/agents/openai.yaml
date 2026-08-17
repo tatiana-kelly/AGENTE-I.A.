@@ -1,0 +1,4 @@
+interface:
+  display_name: "SAL Project"
+  short_description: "Audita e melhora projetos com o SAL AI"
+  default_prompt: "Use $sal-project para auditar este projeto com o AI Orchestrator."
