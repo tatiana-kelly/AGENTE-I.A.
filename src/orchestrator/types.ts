@@ -26,6 +26,8 @@ export type EffectLevel = "READ" | "WRITE" | "EXTERNAL_ACTION" | "UNKNOWN";
 /** FASE 4. */
 export type AgentMode = "ONE_AGENT" | "MULTI_AGENT";
 
+export type ValidationStatus = "APPROVED" | "REJECTED" | "NEEDS_HUMAN";
+
 export interface ClassificationResult {
   skills: SkillCategory[];
   effectLevel: EffectLevel;
@@ -84,6 +86,8 @@ export type StepStatus = "success" | "error" | "skipped";
 
 export interface StepExecutionResult {
   provider: ProviderName;
+  /** Original provider replaced by this provider after a controlled failure. */
+  fallbackFor?: ProviderName;
   purpose: string;
   status: StepStatus;
   /** Só presente quando status === "success". */
@@ -105,7 +109,9 @@ export interface OrchestrationResult {
   evidence: EvidenceRecord[];
   validation?: {
     reviewed: boolean;
+    status: ValidationStatus;
     reviewer?: ProviderName;
+    summary: string;
     reviewOutput?: string;
   };
 }

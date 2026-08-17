@@ -22,9 +22,18 @@ export class CostController {
     if (estimatedCostUsd === undefined) {
       return {
         estimatedCostUsd: "unknown",
-        withinBudget: true,
-        requiresConfirmation: false,
-        reason: "Custo estimado indisponível para este provider (sem métrica reportada) — tratado como unknown, não como zero.",
+        withinBudget: false,
+        requiresConfirmation: true,
+        reason: "Custo máximo indisponível para este provider — chamada bloqueada até existir limite explícito.",
+      };
+    }
+
+    if (!Number.isFinite(estimatedCostUsd) || estimatedCostUsd < 0) {
+      return {
+        estimatedCostUsd: "unknown",
+        withinBudget: false,
+        requiresConfirmation: true,
+        reason: "Estimativa de custo inválida — chamada bloqueada por segurança.",
       };
     }
 
@@ -45,9 +54,16 @@ export class CostController {
 }
 
 export function loadCostControlConfigFromEnv(env: NodeJS.ProcessEnv = process.env): CostControlConfig {
+  const maxCostPerTaskUsd = positiveNumberOrDefault(env.MAX_COST_PER_TASK_USD, 1);
+  const requestedConfirmation = positiveNumberOrDefault(env.REQUIRE_CONFIRMATION_ABOVE_USD, 0.5);
   return {
-    maxCostPerTaskUsd: Number(env.MAX_COST_PER_TASK_USD ?? "1.00"),
-    requireConfirmationAboveUsd: Number(env.REQUIRE_CONFIRMATION_ABOVE_USD ?? "0.50"),
+    maxCostPerTaskUsd,
+    requireConfirmationAboveUsd: Math.min(requestedConfirmation, maxCostPerTaskUsd),
     providerPriority: ["openai", "manus", "anthropic", "gemini"],
   };
+}
+
+function positiveNumberOrDefault(value: string | undefined, fallback: number): number {
+  const parsed = Number(value ?? fallback);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }

@@ -4,12 +4,12 @@ import { describe, expect, it } from "vitest";
 import { orchestrate } from "../src/orchestrator/index.js";
 import { ProviderManager } from "../src/orchestrator/providerManager.js";
 import { InMemoryEvidenceSink } from "../src/orchestrator/evidenceManager.js";
-import type { AIProvider, HealthStatus, TaskInput, TaskResult } from "../src/providers/types.js";
+import type { AIProvider, HealthStatus, ProviderCapabilities, TaskInput, TaskResult } from "../src/providers/types.js";
 
 const FIXTURES_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "projects");
 
 class FakeProvider implements AIProvider {
-  readonly capabilities = { mayProduceExternalEffects: false } as const;
+  readonly capabilities: ProviderCapabilities = { mayProduceExternalEffects: false, estimatedMaxCostUsd: 0 };
   readonly inputs: TaskInput[] = [];
 
   constructor(
@@ -28,11 +28,19 @@ class FakeProvider implements AIProvider {
 }
 
 class AgenticFakeProvider extends FakeProvider {
-  override readonly capabilities = { mayProduceExternalEffects: true } as const;
+  override readonly capabilities: ProviderCapabilities = { mayProduceExternalEffects: true, estimatedMaxCostUsd: 0 };
+}
+
+class UnknownCostFakeProvider extends FakeProvider {
+  override readonly capabilities: ProviderCapabilities = { mayProduceExternalEffects: false };
+}
+
+class ExpensiveFakeProvider extends FakeProvider {
+  override readonly capabilities: ProviderCapabilities = { mayProduceExternalEffects: false, estimatedMaxCostUsd: 2 };
 }
 
 describe("orchestrate() — execução ponta a ponta", () => {
-  it("executa uma tarefa de leitura (investigação) mesmo em READ_ONLY e registra evidência", async () => {
+  it("executa leitura segura em READ_ONLY, registra evidência e sinaliza ausência de reviewer", async () => {
     const manager = new ProviderManager();
     manager.register(new FakeProvider("manus", "achei a causa raiz"));
     manager.register(new FakeProvider("openai", "confirmado, faz sentido"));
@@ -43,10 +51,11 @@ describe("orchestrate() — execução ponta a ponta", () => {
       { security: { mode: "READ_ONLY", dryRun: true }, providerManager: manager, evidenceSink },
     );
 
-    expect(result.requiresApproval).toBe(false);
+    expect(result.requiresApproval).toBe(true);
     expect(result.results).toEqual([{ provider: "manus", purpose: expect.any(String), status: "success", output: "achei a causa raiz" }]);
     expect(result.evidence).toHaveLength(1);
     expect(evidenceSink.list()).toHaveLength(1);
+    expect(result.validation).toMatchObject({ reviewed: false, status: "NEEDS_HUMAN" });
   });
 
   it("bloqueia uma tarefa de implementação (escrita) em READ_ONLY sem chamar nenhum provider", async () => {
@@ -103,7 +112,7 @@ describe("orchestrate() — execução ponta a ponta", () => {
     expect(result.evidence).toEqual([]);
   });
 
-  it("interrompe a cadeia quando um step obrigatório não está registrado", async () => {
+  it("executa o fallback declarado quando o provider primário não está registrado", async () => {
     const manager = new ProviderManager();
     manager.register(new FakeProvider("openai", "decisão tomada"));
     // "manus" não registrado — o plano de "Pesquise e depois tome uma decisão." pede manus → openai.
@@ -115,7 +124,37 @@ describe("orchestrate() — execução ponta a ponta", () => {
 
     expect(result.plan.mode).toBe("MULTI_AGENT");
     expect(result.results[0]).toMatchObject({ provider: "manus", status: "skipped" });
-    expect(result.results).toHaveLength(1);
+    expect(result.results[1]).toMatchObject({ provider: "openai", fallbackFor: "manus", status: "success" });
+    expect(result.evidence[0]).toMatchObject({ fallback_triggered: true, fallback_reason: expect.stringContaining("manus") });
+  });
+
+  it("bloqueia antes da chamada quando o provider não declara teto de custo", async () => {
+    const manager = new ProviderManager();
+    const openai = new UnknownCostFakeProvider("openai", "não deveria rodar");
+    manager.register(openai);
+
+    const result = await orchestrate(
+      { task: "Tome uma decisão estratégica." },
+      { security: { mode: "AUTONOMOUS", dryRun: false }, providerManager: manager },
+    );
+
+    expect(result.results[0]).toMatchObject({ provider: "openai", status: "skipped", reason: expect.stringContaining("Custo máximo indisponível") });
+    expect(openai.inputs).toHaveLength(0);
+    expect(result.requiresApproval).toBe(true);
+  });
+
+  it("bloqueia antes da chamada quando a reserva excede o orçamento da tarefa", async () => {
+    const manager = new ProviderManager();
+    const openai = new ExpensiveFakeProvider("openai", "não deveria rodar");
+    manager.register(openai);
+
+    const result = await orchestrate(
+      { task: "Tome uma decisão estratégica." },
+      { security: { mode: "AUTONOMOUS", dryRun: false }, providerManager: manager },
+    );
+
+    expect(result.results[0]).toMatchObject({ provider: "openai", status: "skipped", reason: expect.stringContaining("excede o máximo") });
+    expect(openai.inputs).toHaveLength(0);
   });
 
   it("propaga contexto do projeto e saída anterior para o próximo step", async () => {
@@ -152,7 +191,7 @@ describe("orchestrate() — execução ponta a ponta", () => {
   it("roda a cadeia de validação (reviewer) quando a routing decision atribui um", async () => {
     const manager = new ProviderManager();
     manager.register(new FakeProvider("manus", "achei o motivo"));
-    manager.register(new FakeProvider("openai", "revisão: faz sentido do ponto de vista de negócio"));
+    manager.register(new FakeProvider("openai", '{"status":"APPROVED","summary":"faz sentido para o negócio"}'));
 
     const result = await orchestrate(
       { task: "Analise os dados e me diga o que está acontecendo." },
@@ -160,8 +199,48 @@ describe("orchestrate() — execução ponta a ponta", () => {
     );
 
     expect(result.routing.reviewer).toBe("openai");
-    expect(result.validation).toMatchObject({ reviewed: true, reviewer: "openai" });
+    expect(result.validation).toMatchObject({ reviewed: true, status: "APPROVED", reviewer: "openai" });
     expect(result.evidence).toHaveLength(2); // resultado primário + revisão
+  });
+
+  it("encaminha para humano quando OpenAI produz o resultado sem reviewer independente", async () => {
+    const manager = new ProviderManager();
+    const openai = new FakeProvider("openai", "decisão estratégica");
+    manager.register(openai);
+
+    const result = await orchestrate(
+      { task: "Tome uma decisão estratégica." },
+      { security: { mode: "AUTONOMOUS", dryRun: false }, providerManager: manager },
+    );
+
+    expect(result.validation).toMatchObject({
+      reviewed: false,
+      status: "NEEDS_HUMAN",
+      summary: expect.stringContaining("Nenhum reviewer independente"),
+    });
+    expect(openai.inputs).toHaveLength(1);
+    expect(result.requiresApproval).toBe(true);
+  });
+
+  it("bloqueia autorrevisão quando o último artefato da cadeia já foi produzido pelo reviewer", async () => {
+    const manager = new ProviderManager();
+    const manus = new FakeProvider("manus", "pesquisa");
+    const openai = new FakeProvider("openai", "decisão");
+    manager.register(manus);
+    manager.register(openai);
+
+    const result = await orchestrate(
+      { task: "Pesquise e depois tome uma decisão." },
+      { security: { mode: "AUTONOMOUS", dryRun: false }, providerManager: manager },
+    );
+
+    expect(result.validation).toMatchObject({
+      reviewed: false,
+      status: "NEEDS_HUMAN",
+      reviewer: "openai",
+      summary: expect.stringContaining("Autorrevisão bloqueada"),
+    });
+    expect(openai.inputs).toHaveLength(1);
   });
 
   it("continua sem erro quando nenhum provider está registrado (dry-run total)", async () => {

@@ -32,6 +32,8 @@ export interface HealthStatus {
 export interface ProviderCapabilities {
   /** True when the provider can invoke remote tools or affect external systems. */
   mayProduceExternalEffects: boolean;
+  /** Conservative maximum reserved before each call. Undefined is fail-closed. */
+  estimatedMaxCostUsd?: number;
 }
 
 export interface AIProvider {

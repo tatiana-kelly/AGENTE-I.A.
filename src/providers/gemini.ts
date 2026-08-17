@@ -7,6 +7,7 @@ export interface GeminiProviderConfig {
   model?: string;
   baseUrl?: string;
   timeoutMs?: number;
+  estimatedMaxCostUsd?: number;
 }
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
@@ -29,7 +30,7 @@ interface ModelsListResponse {
  */
 export class GeminiProvider implements AIProvider {
   readonly name = "gemini" as const;
-  readonly capabilities = { mayProduceExternalEffects: false } as const;
+  readonly capabilities;
   private readonly apiKey: string;
   private readonly model: string;
   private readonly baseUrl: string;
@@ -43,6 +44,10 @@ export class GeminiProvider implements AIProvider {
     this.model = config.model ?? DEFAULT_MODEL;
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.timeoutMs = config.timeoutMs;
+    this.capabilities = {
+      mayProduceExternalEffects: false,
+      estimatedMaxCostUsd: config.estimatedMaxCostUsd,
+    } as const;
   }
 
   async analyze(input: TaskInput): Promise<TaskResult> {

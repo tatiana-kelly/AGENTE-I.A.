@@ -10,6 +10,7 @@ export interface ManusProviderConfig {
   timeoutMs?: number;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
+  estimatedMaxCostUsd?: number;
 }
 
 const DEFAULT_BASE_URL = "https://api.manus.ai";
@@ -111,7 +112,7 @@ export class ManusTaskWaitingError extends Error {
  */
 export class ManusProvider implements AIProvider {
   readonly name = "manus" as const;
-  readonly capabilities = { mayProduceExternalEffects: true } as const;
+  readonly capabilities;
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly agentProfile: string;
@@ -129,6 +130,10 @@ export class ManusProvider implements AIProvider {
     this.timeoutMs = config.timeoutMs;
     this.pollIntervalMs = config.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.pollTimeoutMs = config.pollTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS;
+    this.capabilities = {
+      mayProduceExternalEffects: true,
+      estimatedMaxCostUsd: config.estimatedMaxCostUsd,
+    } as const;
   }
 
   async analyze(input: TaskInput): Promise<TaskResult> {

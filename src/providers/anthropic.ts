@@ -8,6 +8,7 @@ export interface AnthropicProviderConfig {
   baseUrl?: string;
   timeoutMs?: number;
   maxTokens?: number;
+  estimatedMaxCostUsd?: number;
 }
 
 const DEFAULT_MODEL = "claude-sonnet-5";
@@ -31,7 +32,7 @@ interface ModelsListResponse {
  */
 export class AnthropicProvider implements AIProvider {
   readonly name = "anthropic" as const;
-  readonly capabilities = { mayProduceExternalEffects: false } as const;
+  readonly capabilities;
   private readonly apiKey: string;
   private readonly model: string;
   private readonly baseUrl: string;
@@ -47,6 +48,10 @@ export class AnthropicProvider implements AIProvider {
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.timeoutMs = config.timeoutMs;
     this.maxTokens = config.maxTokens ?? DEFAULT_MAX_TOKENS;
+    this.capabilities = {
+      mayProduceExternalEffects: false,
+      estimatedMaxCostUsd: config.estimatedMaxCostUsd,
+    } as const;
   }
 
   async analyze(input: TaskInput): Promise<TaskResult> {

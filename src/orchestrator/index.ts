@@ -67,67 +67,99 @@ export async function orchestrate(
   const evidence: EvidenceRecord[] = [];
   let lastSuccessful: { provider: ProviderName; result: TaskResult } | undefined;
   let planCompleted = true;
+  let reservedCostUsd = 0;
 
   for (const step of plan.steps) {
-    const taskId = `${Date.now()}-${step.provider}`;
+    const candidates = providerCandidates(step.provider, routing.primary, routing.fallback);
+    const failedReasons: string[] = [];
+    let stepCompleted = false;
 
-    if (!providerManager.has(step.provider)) {
-      results.push({ provider: step.provider, purpose: step.purpose, status: "skipped", reason: "Provider não registrado no Provider Manager." });
-      observability.log({ task_id: taskId, provider: step.provider, status: "skipped", error: "provider não registrado" });
-      planCompleted = false;
-      break;
+    for (const candidate of candidates) {
+      const taskId = `${Date.now()}-${candidate}`;
+      const fallbackFor = candidate === step.provider ? undefined : step.provider;
+
+      if (!providerManager.has(candidate)) {
+        const reason = "Provider não registrado no Provider Manager.";
+        results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason });
+        observability.log({ task_id: taskId, provider: candidate, status: "skipped", error: reason });
+        failedReasons.push(`${candidate}: ${reason}`);
+        continue;
+      }
+
+      const capabilities = providerManager.capabilities(candidate);
+      const providerGate = evaluateExecution(
+        security,
+        classification.effectLevel,
+        capabilities.mayProduceExternalEffects,
+      );
+      if (!providerGate.allowed) {
+        results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason: providerGate.reason });
+        observability.log({ task_id: taskId, provider: candidate, status: "skipped", error: providerGate.reason });
+        base.requiresApproval ||= providerGate.requiresApproval;
+        failedReasons.push(`${candidate}: ${providerGate.reason}`);
+        continue;
+      }
+
+      const estimatedTaskCost =
+        capabilities.estimatedMaxCostUsd === undefined
+          ? undefined
+          : reservedCostUsd + capabilities.estimatedMaxCostUsd;
+      const cost = costController.evaluate(estimatedTaskCost);
+      if (!cost.withinBudget || cost.requiresConfirmation) {
+        results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason: cost.reason });
+        observability.log({ task_id: taskId, provider: candidate, status: "skipped", error: cost.reason });
+        base.requiresApproval = true;
+        failedReasons.push(`${candidate}: ${cost.reason}`);
+        continue;
+      }
+      reservedCostUsd = estimatedTaskCost as number;
+
+      const start = performance.now();
+      try {
+        const result = await providerManager.call(candidate, {
+          taskId,
+          prompt: buildStepPrompt(request.task, step.purpose, context.loaded, results),
+          project: request.project,
+          context: {
+            projectFiles: context.loaded,
+            previousResults: successfulOutputs(results),
+          },
+          skill: classification.skills[0],
+        });
+        const durationMs = performance.now() - start;
+
+        results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "success", output: result.output });
+        observability.log({ task_id: taskId, provider: candidate, status: "success", duration_ms: Math.round(durationMs) });
+
+        const record = buildEvidenceRecord({
+          taskId,
+          project: request.project,
+          provider: candidate,
+          skill: classification.skills[0],
+          routingReason: routing.reason,
+          result,
+          confidence: routing.confidence,
+          timestamp: new Date().toISOString(),
+          limitations: `Custo máximo reservado acumulado: US$ ${reservedCostUsd.toFixed(2)}.`,
+          fallbackTriggered: fallbackFor !== undefined,
+          fallbackReason: fallbackFor === undefined ? undefined : failedReasons.join(" | "),
+        });
+        await evidenceSink.record(record);
+        evidence.push(record);
+
+        lastSuccessful = { provider: candidate, result };
+        stepCompleted = true;
+        break;
+      } catch (error) {
+        const durationMs = performance.now() - start;
+        const message = error instanceof Error ? error.message : String(error);
+        results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "error", reason: message });
+        observability.log({ task_id: taskId, provider: candidate, status: "error", duration_ms: Math.round(durationMs), error: message });
+        failedReasons.push(`${candidate}: ${message}`);
+      }
     }
 
-    const providerGate = evaluateExecution(
-      security,
-      classification.effectLevel,
-      providerManager.capabilities(step.provider).mayProduceExternalEffects,
-    );
-    if (!providerGate.allowed) {
-      results.push({ provider: step.provider, purpose: step.purpose, status: "skipped", reason: providerGate.reason });
-      observability.log({ task_id: taskId, provider: step.provider, status: "skipped", error: providerGate.reason });
-      planCompleted = false;
-      break;
-    }
-
-    const start = performance.now();
-    try {
-      const result = await providerManager.call(step.provider, {
-        taskId,
-        prompt: buildStepPrompt(request.task, step.purpose, context.loaded, results),
-        project: request.project,
-        context: {
-          projectFiles: context.loaded,
-          previousResults: successfulOutputs(results),
-        },
-        skill: classification.skills[0],
-      });
-      const durationMs = performance.now() - start;
-
-      results.push({ provider: step.provider, purpose: step.purpose, status: "success", output: result.output });
-      observability.log({ task_id: taskId, provider: step.provider, status: "success", duration_ms: Math.round(durationMs) });
-
-      const cost = costController.evaluate(undefined);
-      const record = buildEvidenceRecord({
-        taskId,
-        project: request.project,
-        provider: step.provider,
-        skill: classification.skills[0],
-        routingReason: routing.reason,
-        result,
-        confidence: routing.confidence,
-        timestamp: new Date().toISOString(),
-        limitations: cost.estimatedCostUsd === "unknown" ? "Custo não reportado pelo provider (unknown)." : undefined,
-      });
-      await evidenceSink.record(record);
-      evidence.push(record);
-
-      lastSuccessful = { provider: step.provider, result };
-    } catch (error) {
-      const durationMs = performance.now() - start;
-      const message = error instanceof Error ? error.message : String(error);
-      results.push({ provider: step.provider, purpose: step.purpose, status: "error", reason: message });
-      observability.log({ task_id: taskId, provider: step.provider, status: "error", duration_ms: Math.round(durationMs), error: message });
+    if (!stepCompleted) {
       planCompleted = false;
       break;
     }
@@ -138,10 +170,47 @@ export async function orchestrate(
     const outcome = await validateResult(
       providerManager,
       routing,
-      { taskId: `${Date.now()}-review`, prompt: request.task, project: request.project, skill: classification.skills[0] },
+      {
+        taskId: `${Date.now()}-review`,
+        prompt: request.task,
+        project: request.project,
+        context: { projectFiles: context.loaded, previousResults: successfulOutputs(results) },
+        skill: classification.skills[0],
+      },
       lastSuccessful.result,
+      {
+        artifactProvider: lastSuccessful.provider,
+        authorizeReviewer: (reviewer) => {
+          const capabilities = providerManager.capabilities(reviewer);
+          const reviewerGate = evaluateExecution(
+            security,
+            "READ",
+            capabilities.mayProduceExternalEffects,
+          );
+          if (!reviewerGate.allowed) {
+            return { allowed: false, reason: reviewerGate.reason };
+          }
+          const estimatedTaskCost =
+            capabilities.estimatedMaxCostUsd === undefined
+              ? undefined
+              : reservedCostUsd + capabilities.estimatedMaxCostUsd;
+          const cost = costController.evaluate(estimatedTaskCost);
+          if (!cost.withinBudget || cost.requiresConfirmation) {
+            return { allowed: false, reason: cost.reason };
+          }
+          reservedCostUsd = estimatedTaskCost as number;
+          return { allowed: true, reason: cost.reason };
+        },
+      },
     );
-    validation = { reviewed: outcome.reviewed, reviewer: outcome.reviewer, reviewOutput: outcome.reviewResult?.output };
+    validation = {
+      reviewed: outcome.reviewed,
+      status: outcome.status,
+      reviewer: outcome.reviewer,
+      summary: outcome.summary,
+      reviewOutput: outcome.reviewResult?.output,
+    };
+    base.requiresApproval ||= outcome.status === "NEEDS_HUMAN" || outcome.status === "REJECTED";
     if (outcome.reviewed && outcome.reviewResult) {
       const record = buildEvidenceRecord({
         taskId: `${Date.now()}-review`,
@@ -159,6 +228,14 @@ export async function orchestrate(
   }
 
   return { ...base, results, evidence, validation };
+}
+
+function providerCandidates(
+  provider: ProviderName,
+  primary: ProviderName,
+  fallback: ProviderName | undefined,
+): ProviderName[] {
+  return provider === primary && fallback && fallback !== provider ? [provider, fallback] : [provider];
 }
 
 const MAX_CONTEXT_CHARS = 40_000;
