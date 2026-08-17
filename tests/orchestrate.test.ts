@@ -1,18 +1,24 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { orchestrate } from "../src/orchestrator/index.js";
 import { ProviderManager } from "../src/orchestrator/providerManager.js";
 import { InMemoryEvidenceSink } from "../src/orchestrator/evidenceManager.js";
 import type { AIProvider, HealthStatus, TaskInput, TaskResult } from "../src/providers/types.js";
 
+const FIXTURES_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "projects");
+
 class FakeProvider implements AIProvider {
   readonly capabilities = { mayProduceExternalEffects: false } as const;
+  readonly inputs: TaskInput[] = [];
 
   constructor(
     readonly name: AIProvider["name"],
     private readonly output: string,
   ) {}
 
-  async analyze(_input: TaskInput): Promise<TaskResult> {
+  async analyze(input: TaskInput): Promise<TaskResult> {
+    this.inputs.push(input);
     return { output: this.output, sources: [`fake://${this.name}`], evidence: [], confidence: 0.9 };
   }
 
@@ -97,7 +103,7 @@ describe("orchestrate() — execução ponta a ponta", () => {
     expect(result.evidence).toEqual([]);
   });
 
-  it("marca como skipped (sem lançar erro) um step cujo provider não está registrado", async () => {
+  it("interrompe a cadeia quando um step obrigatório não está registrado", async () => {
     const manager = new ProviderManager();
     manager.register(new FakeProvider("openai", "decisão tomada"));
     // "manus" não registrado — o plano de "Pesquise e depois tome uma decisão." pede manus → openai.
@@ -109,7 +115,38 @@ describe("orchestrate() — execução ponta a ponta", () => {
 
     expect(result.plan.mode).toBe("MULTI_AGENT");
     expect(result.results[0]).toMatchObject({ provider: "manus", status: "skipped" });
-    expect(result.results[1]).toMatchObject({ provider: "openai", status: "success" });
+    expect(result.results).toHaveLength(1);
+  });
+
+  it("propaga contexto do projeto e saída anterior para o próximo step", async () => {
+    const manager = new ProviderManager();
+    const manus = new FakeProvider("manus", "causa raiz identificada");
+    const openai = new FakeProvider("openai", "decisão baseada na causa raiz");
+    manager.register(manus);
+    manager.register(openai);
+
+    const result = await orchestrate(
+      { task: "Pesquise e depois tome uma decisão.", project: "demo-project" },
+      {
+        security: { mode: "AUTONOMOUS", dryRun: false },
+        providerManager: manager,
+        projectsRoot: FIXTURES_ROOT,
+      },
+    );
+
+    expect(result.results.map(({ provider, status }) => ({ provider, status }))).toEqual([
+      { provider: "manus", status: "success" },
+      { provider: "openai", status: "success" },
+    ]);
+    expect(manus.inputs[0]?.context).toMatchObject({
+      projectFiles: { "PROJECT-CONTEXT.md": expect.stringContaining("Fixture de teste") },
+      previousResults: [],
+    });
+    expect(openai.inputs[0]?.prompt).toContain("causa raiz identificada");
+    expect(openai.inputs[0]?.prompt).toContain("tomar a decisão");
+    expect(openai.inputs[0]?.context).toMatchObject({
+      previousResults: [{ provider: "manus", output: "causa raiz identificada" }],
+    });
   });
 
   it("roda a cadeia de validação (reviewer) quando a routing decision atribui um", async () => {

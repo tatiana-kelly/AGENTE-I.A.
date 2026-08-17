@@ -66,6 +66,7 @@ export async function orchestrate(
   const results: StepExecutionResult[] = [];
   const evidence: EvidenceRecord[] = [];
   let lastSuccessful: { provider: ProviderName; result: TaskResult } | undefined;
+  let planCompleted = true;
 
   for (const step of plan.steps) {
     const taskId = `${Date.now()}-${step.provider}`;
@@ -73,7 +74,8 @@ export async function orchestrate(
     if (!providerManager.has(step.provider)) {
       results.push({ provider: step.provider, purpose: step.purpose, status: "skipped", reason: "Provider não registrado no Provider Manager." });
       observability.log({ task_id: taskId, provider: step.provider, status: "skipped", error: "provider não registrado" });
-      continue;
+      planCompleted = false;
+      break;
     }
 
     const providerGate = evaluateExecution(
@@ -84,15 +86,20 @@ export async function orchestrate(
     if (!providerGate.allowed) {
       results.push({ provider: step.provider, purpose: step.purpose, status: "skipped", reason: providerGate.reason });
       observability.log({ task_id: taskId, provider: step.provider, status: "skipped", error: providerGate.reason });
-      continue;
+      planCompleted = false;
+      break;
     }
 
     const start = performance.now();
     try {
       const result = await providerManager.call(step.provider, {
         taskId,
-        prompt: request.task,
+        prompt: buildStepPrompt(request.task, step.purpose, context.loaded, results),
         project: request.project,
+        context: {
+          projectFiles: context.loaded,
+          previousResults: successfulOutputs(results),
+        },
         skill: classification.skills[0],
       });
       const durationMs = performance.now() - start;
@@ -121,11 +128,13 @@ export async function orchestrate(
       const message = error instanceof Error ? error.message : String(error);
       results.push({ provider: step.provider, purpose: step.purpose, status: "error", reason: message });
       observability.log({ task_id: taskId, provider: step.provider, status: "error", duration_ms: Math.round(durationMs), error: message });
+      planCompleted = false;
+      break;
     }
   }
 
   let validation: OrchestrationResult["validation"];
-  if (lastSuccessful) {
+  if (lastSuccessful && planCompleted) {
     const outcome = await validateResult(
       providerManager,
       routing,
@@ -150,6 +159,42 @@ export async function orchestrate(
   }
 
   return { ...base, results, evidence, validation };
+}
+
+const MAX_CONTEXT_CHARS = 40_000;
+const MAX_PREVIOUS_OUTPUT_CHARS = 40_000;
+
+function successfulOutputs(results: StepExecutionResult[]): Array<{ provider: ProviderName; output: string }> {
+  return results.flatMap((result) =>
+    result.status === "success" && result.output ? [{ provider: result.provider, output: result.output }] : [],
+  );
+}
+
+function buildStepPrompt(
+  task: string,
+  purpose: string,
+  projectFiles: Record<string, string>,
+  previousResults: StepExecutionResult[],
+): string {
+  const sections = [`Tarefa original:\n${task}`, `Objetivo desta etapa:\n${purpose}`];
+  const contextText = Object.entries(projectFiles)
+    .map(([name, content]) => `### ${name}\n${content}`)
+    .join("\n\n")
+    .slice(0, MAX_CONTEXT_CHARS);
+  if (contextText) {
+    sections.push(`Contexto autorizado do projeto:\n${contextText}`);
+  }
+
+  const previousText = successfulOutputs(previousResults)
+    .map(({ provider, output }) => `### Saída de ${provider}\n${output}`)
+    .join("\n\n")
+    .slice(0, MAX_PREVIOUS_OUTPUT_CHARS);
+  if (previousText) {
+    sections.push(`Resultados anteriores da cadeia:\n${previousText}`);
+  }
+
+  sections.push("Execute somente o objetivo desta etapa e preserve as evidências relevantes para a próxima etapa.");
+  return sections.join("\n\n");
 }
 
 export * from "./types.js";

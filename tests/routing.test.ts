@@ -92,4 +92,9 @@ describe("classificação de efeitos — fail-closed", () => {
   it("trata tarefa sem intenção reconhecida como UNKNOWN", () => {
     expect(decide("Cuide disso para mim.").classification.effectLevel).toBe("UNKNOWN");
   });
+
+  it("preserva investigação, decisão, construção e validação quando todos os sinais existem", () => {
+    const { plan } = decide("Pesquise a causa, tome uma decisão e implemente a solução.");
+    expect(plan.steps.map((step) => step.provider)).toEqual(["manus", "openai", "anthropic", "openai"]);
+  });
 });

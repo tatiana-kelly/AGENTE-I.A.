@@ -89,6 +89,9 @@ const WRITE_PATTERN =
 const READ_PATTERN =
   /\b(analis\w*|investig\w*|descobr\w*|descubr\w*|apur\w*|explor\w*|pesquis\w*|avali\w*|revis\w*|expli\w*|compar\w*|resum\w*|diagnostic\w*|identifi\w*|liste|listar|mostre|mostrar|consulte|consultar|leia|ler)\b/i;
 
+const IMPLEMENTATION_DISCUSSION_PATTERN =
+  /\b(analis\w*|avali\w*|revis\w*|expli\w*)\s+(como|se|a forma de)\s+(implement\w*|constru\w*|codifi\w*|program\w*)\b/i;
+
 function classifyEffect(task: string, matched: ClassificationRule[]): EffectLevel {
   if (EXTERNAL_ACTION_PATTERN.test(task)) {
     return "EXTERNAL_ACTION";
@@ -99,12 +102,16 @@ function classifyEffect(task: string, matched: ClassificationRule[]): EffectLeve
   }
 
   const implementationSignal = matched.some((rule) => rule.requiresImplementation === true);
-  if (READ_PATTERN.test(task)) {
+  if (implementationSignal && IMPLEMENTATION_DISCUSSION_PATTERN.test(task)) {
     return "READ";
   }
 
   if (implementationSignal) {
     return "WRITE";
+  }
+
+  if (READ_PATTERN.test(task)) {
+    return "READ";
   }
 
   const readOnlySignal = matched.some(
