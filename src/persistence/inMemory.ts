@@ -24,6 +24,13 @@ export class InMemoryOrchestrationRepository implements OrchestrationRepository 
     this.tasks.set(taskId, structuredClone({ ...current, ...update }));
   }
 
+  async claimTaskForContinuation(taskId: string, updatedAt: string): Promise<boolean> {
+    const current = this.tasks.get(taskId);
+    if (!current || current.status !== "awaiting_approval") return false;
+    this.tasks.set(taskId, structuredClone({ ...current, status: "running", updatedAt }));
+    return true;
+  }
+
   async createRun(run: OrchestrationRunRecord): Promise<void> {
     if (!this.tasks.has(run.taskId)) throw new Error(`Task ${run.taskId} não encontrada.`);
     if (this.runs.has(run.id)) throw new Error(`Run ${run.id} já existe.`);

@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { ProviderName, TaskResult } from "../providers/types.js";
-import { buildSupabaseRepositoryFromEnv, type OrchestrationRepository } from "../persistence/index.js";
+import {
+  buildSupabaseRepositoryFromEnv,
+  type OrchestrationRepository,
+  type PersistedApproval,
+} from "../persistence/index.js";
 import { resolveContext } from "./contextResolver.js";
 import { classifyTask } from "./taskClassifier.js";
 import { routeTask } from "./routingEngine.js";
@@ -19,6 +23,9 @@ export interface OrchestrateOptions {
   providerManager?: ProviderManager;
   evidenceSink?: EvidenceSink;
   repository?: OrchestrationRepository;
+  continuedFromTaskId?: string;
+  approval?: PersistedApproval;
+  approvedMaxCostUsd?: number;
   observability?: Observability;
   costController?: CostController;
 }
@@ -70,6 +77,8 @@ export async function orchestrate(
   await repository?.createTask({
     id: taskId,
     request,
+    continuedFromTaskId: options.continuedFromTaskId,
+    approval: options.approval,
     status: "received",
     classification,
     routing,
@@ -121,8 +130,8 @@ export async function orchestrate(
     });
     await recordNonSuccess(runId, routing.primary, "blocked", gate.reason);
     await repository?.updateTask(taskId, {
-      status: "blocked",
-      requiresApproval: true,
+      status: gate.requiresApproval ? "awaiting_approval" : "blocked",
+      requiresApproval: base.requiresApproval,
       updatedAt: new Date().toISOString(),
     });
     return base;
@@ -177,7 +186,7 @@ export async function orchestrate(
         capabilities.estimatedMaxCostUsd === undefined
           ? undefined
           : reservedCostUsd + capabilities.estimatedMaxCostUsd;
-      const cost = costController.evaluate(estimatedTaskCost);
+      const cost = costController.evaluate(estimatedTaskCost, options.approvedMaxCostUsd);
       if (!cost.withinBudget || cost.requiresConfirmation) {
         results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "skipped", reason: cost.reason });
         observability.log({ task_id: runId, provider: candidate, status: "skipped", error: cost.reason });
@@ -312,7 +321,7 @@ export async function orchestrate(
             capabilities.estimatedMaxCostUsd === undefined
               ? undefined
               : reservedCostUsd + capabilities.estimatedMaxCostUsd;
-          const cost = costController.evaluate(estimatedTaskCost);
+          const cost = costController.evaluate(estimatedTaskCost, options.approvedMaxCostUsd);
           if (!cost.withinBudget || cost.requiresConfirmation) {
             return { allowed: false, reason: cost.reason };
           }

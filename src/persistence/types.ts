@@ -26,9 +26,18 @@ export interface PersistedValidation {
   summary: string;
 }
 
+export interface PersistedApproval {
+  approved: true;
+  source: "n8n" | "api";
+  approvedAt: string;
+  approvedMaxCostUsd: number;
+}
+
 export interface OrchestrationTaskRecord {
   id: string;
   request: OrchestrationRequest;
+  continuedFromTaskId?: string;
+  approval?: PersistedApproval;
   status: TaskPersistenceStatus;
   classification: ClassificationResult;
   routing: RoutingDecision;
@@ -79,6 +88,8 @@ export interface PersistedTaskSnapshot {
 export interface OrchestrationRepository {
   createTask(task: OrchestrationTaskRecord): Promise<void>;
   updateTask(taskId: string, update: OrchestrationTaskUpdate): Promise<void>;
+  /** Atomically moves an awaiting task to running; false prevents duplicate approval replay. */
+  claimTaskForContinuation(taskId: string, updatedAt: string): Promise<boolean>;
   createRun(run: OrchestrationRunRecord): Promise<void>;
   updateRun(runId: string, update: OrchestrationRunUpdate): Promise<void>;
   record(evidence: EvidenceRecord): Promise<void>;

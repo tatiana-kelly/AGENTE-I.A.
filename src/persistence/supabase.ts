@@ -56,11 +56,19 @@ const validationSchema = z.object({
   reviewer: providerNameSchema.optional(),
   summary: z.string(),
 });
+const approvalSchema = z.object({
+  approved: z.literal(true),
+  source: z.enum(["n8n", "api"]),
+  approvedAt: z.string(),
+  approvedMaxCostUsd: z.number().nonnegative(),
+});
 
 const taskRowSchema = z.object({
   id: z.string().uuid(),
   task_text: z.string(),
   project: z.string().nullable(),
+  continued_from_task_id: z.string().uuid().nullable(),
+  approval: approvalSchema.nullable(),
   status: z.enum(["received", "running", "completed", "awaiting_approval", "blocked", "failed"]),
   classification: classificationSchema,
   routing: routingSchema,
@@ -132,6 +140,19 @@ export class SupabaseOrchestrationRepository implements OrchestrationRepository 
       method: "PATCH",
       body: JSON.stringify(toTaskUpdateRow(update)),
     });
+  }
+
+  async claimTaskForContinuation(taskId: string, updatedAt: string): Promise<boolean> {
+    const response = await this.request(
+      `ai_tasks?id=eq.${encodeURIComponent(taskId)}&status=eq.awaiting_approval&select=*`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ status: "running", updated_at: updatedAt }),
+      },
+    );
+    const rows = z.array(taskRowSchema).parse(await response.json());
+    return rows.length === 1;
   }
 
   async createRun(run: OrchestrationRunRecord): Promise<void> {
@@ -210,6 +231,8 @@ function toTaskRow(task: OrchestrationTaskRecord): Record<string, unknown> {
     id: task.id,
     task_text: task.request.task,
     project: task.request.project,
+    continued_from_task_id: task.continuedFromTaskId,
+    approval: task.approval,
     status: task.status,
     classification: task.classification,
     routing: task.routing,
@@ -274,6 +297,8 @@ function fromTaskRow(row: z.infer<typeof taskRowSchema>): OrchestrationTaskRecor
   return {
     id: row.id,
     request: { task: row.task_text, project: row.project ?? undefined },
+    continuedFromTaskId: row.continued_from_task_id ?? undefined,
+    approval: row.approval ?? undefined,
     status: row.status,
     classification: row.classification,
     routing: row.routing,

@@ -3,6 +3,8 @@ import type { EffectLevel, ExecutionMode } from "./types.js";
 export interface SecurityContext {
   mode: ExecutionMode;
   dryRun: boolean;
+  /** Internal signal supplied only after an authenticated approval event. */
+  approvalGranted?: boolean;
 }
 
 export interface SecurityDecision {
@@ -26,7 +28,7 @@ export function evaluateExecution(
   effectLevel: EffectLevel,
   providerMayProduceExternalEffects = false,
 ): SecurityDecision {
-  const { mode, dryRun } = context;
+  const { mode, dryRun, approvalGranted = false } = context;
   const effectiveLevel = providerMayProduceExternalEffects && effectLevel === "READ" ? "EXTERNAL_ACTION" : effectLevel;
 
   if (effectiveLevel === "READ") {
@@ -74,6 +76,16 @@ export function evaluateExecution(
   }
 
   if (mode === "ASSISTED") {
+    if (approvalGranted) {
+      return {
+        mode,
+        dryRun,
+        effectLevel: effectiveLevel,
+        allowed: true,
+        requiresApproval: false,
+        reason: "Modo ASSISTED: aprovação explícita autenticada recebida.",
+      };
+    }
     return {
       mode,
       dryRun,

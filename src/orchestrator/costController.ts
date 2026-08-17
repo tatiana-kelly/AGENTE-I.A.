@@ -18,7 +18,7 @@ export interface CostEvaluation {
 export class CostController {
   constructor(private readonly config: CostControlConfig) {}
 
-  evaluate(estimatedCostUsd: number | undefined): CostEvaluation {
+  evaluate(estimatedCostUsd: number | undefined, approvedMaxCostUsd?: number): CostEvaluation {
     if (estimatedCostUsd === undefined) {
       return {
         estimatedCostUsd: "unknown",
@@ -38,13 +38,21 @@ export class CostController {
     }
 
     const withinBudget = estimatedCostUsd <= this.config.maxCostPerTaskUsd;
-    const requiresConfirmation = estimatedCostUsd > this.config.requireConfirmationAboveUsd;
+    const confirmationCoversEstimate =
+      approvedMaxCostUsd !== undefined &&
+      Number.isFinite(approvedMaxCostUsd) &&
+      approvedMaxCostUsd >= 0 &&
+      estimatedCostUsd <= approvedMaxCostUsd;
+    const requiresConfirmation =
+      estimatedCostUsd > this.config.requireConfirmationAboveUsd && !confirmationCoversEstimate;
 
     let reason: string;
     if (!withinBudget) {
       reason = `Custo estimado (US$ ${estimatedCostUsd.toFixed(2)}) excede o máximo por tarefa (US$ ${this.config.maxCostPerTaskUsd.toFixed(2)}).`;
     } else if (requiresConfirmation) {
       reason = `Custo estimado (US$ ${estimatedCostUsd.toFixed(2)}) acima do limite de confirmação automática (US$ ${this.config.requireConfirmationAboveUsd.toFixed(2)}).`;
+    } else if (estimatedCostUsd > this.config.requireConfirmationAboveUsd) {
+      reason = `Custo estimado (US$ ${estimatedCostUsd.toFixed(2)}) coberto pela aprovação explícita.`;
     } else {
       reason = "Dentro do orçamento, sem necessidade de confirmação.";
     }
