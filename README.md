@@ -53,7 +53,7 @@ O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION
 ### O que falta (não implementado ainda)
 
 - **FASE 6** — `skills/` com `SKILL.md`/`ROUTING.md`/`VALIDATION.md`
-- **FASE 11** — persistência real em Supabase para `ai_tasks`/`ai_runs`/`ai_evidence` (ver seção "Reaproveitamento" abaixo — não desenhar do zero)
+- **FASE 11** — persistência real e independente em Supabase para `ai_tasks`/`ai_runs`/`ai_evidence`
 - **FASE 13** — API HTTP (`POST /orchestrate`, `GET /tasks/:id`, `POST /tasks/:id/continue`) e integração com n8n
 - **FASE 14** — adapter v2 implementado; falta certificação contra chamada real do Manus
 - **FASE 19-21** — teste real ponta a ponta em `READ_ONLY`, `docs/` completos
@@ -73,7 +73,7 @@ Default é sempre `READ_ONLY` com `DRY_RUN=true` — ver `.env.example`. Só `RE
 
 ## Reaproveitamento conhecido (não redesenhar do zero)
 
-- **Evidence/audit schema**: o Supabase `pendency-tracker` já tem `email_learning_rules` (separa ação-na-plataforma de ação-real-aprovada), `integration_action_audit`, `integration_ingestion_audit` — usar como referência de schema real em produção para a FASE 11.
+- **Persistência do Orchestrator**: é independente do `pendency-tracker`. Não acessar nem alterar aquele projeto; a FASE 11 deve criar somente as tabelas próprias deste repositório.
 - **Gating de execução**: `C:\ssw-relatorios\.claude\hooks\pre_tool_check.ps1` — único exemplo real (não só documentado) de whitelist/blacklist de ação, inspirou `securityLayer.ts`.
 - **Email**: qualquer notificação/alerta deve sair pelo Email Agent oficial (`ia.sal@salexpress.com.br`), nunca reimplementar envio.
 

@@ -56,7 +56,7 @@ NECESSIDADE → já existe (ver DISCOVERY-REPORT.md / C:\SAL_AI_OS\ALREADY_EXIST
 
 Reaproveitamento já identificado nesta Discovery (não redesenhar):
 
-- **Evidence/audit schema**: Supabase `pendency-tracker` (`email_learning_rules`, `integration_action_audit`, `integration_ingestion_audit`) — referência de schema real em produção para a FASE 11.
+- **Persistência do Orchestrator**: a FASE 11 pertence exclusivamente a este projeto. Não acessar, reutilizar nem alterar o schema do `pendency-tracker`, que é outro produto e está fora de escopo por decisão da Tatiana em 2026-08-17.
 - **Gating de execução**: `C:\ssw-relatorios\.claude\hooks\pre_tool_check.ps1` — inspirou `src/orchestrator/securityLayer.ts`.
 - **Email**: qualquer notificação sai pelo Email Agent oficial (`ia.sal@salexpress.com.br`) — nunca reimplementar envio direto (Resend, SMTP, etc.).
 

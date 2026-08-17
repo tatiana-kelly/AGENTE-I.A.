@@ -2,10 +2,8 @@ import type { ProviderName, TaskResult } from "../providers/types.js";
 import type { EvidenceRecord, EvidenceStatus, SkillCategory } from "./types.js";
 
 /**
- * FASE 8 — Evidence-First. Sink is pluggable so FASE 11 can add a Supabase
- * implementation (see `pendency-tracker`'s `integration_action_audit` /
- * `integration_ingestion_audit` tables for prior art) without changing
- * anything upstream of this interface.
+ * FASE 8 — Evidence-First. The sink is pluggable so FASE 11 can persist
+ * evidence without coupling the orchestrator to another product.
  */
 export interface EvidenceSink {
   record(evidence: EvidenceRecord): Promise<void>;
