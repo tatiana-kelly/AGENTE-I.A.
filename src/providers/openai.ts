@@ -7,6 +7,7 @@ export interface OpenAIProviderConfig {
   model?: string;
   baseUrl?: string;
   timeoutMs?: number;
+  estimatedMaxCostUsd?: number;
 }
 
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -28,6 +29,7 @@ interface ModelsListResponse {
  */
 export class OpenAIProvider implements AIProvider {
   readonly name = "openai" as const;
+  readonly capabilities;
   private readonly apiKey: string;
   private readonly model: string;
   private readonly baseUrl: string;
@@ -41,6 +43,10 @@ export class OpenAIProvider implements AIProvider {
     this.model = config.model ?? DEFAULT_MODEL;
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.timeoutMs = config.timeoutMs;
+    this.capabilities = {
+      mayProduceExternalEffects: false,
+      estimatedMaxCostUsd: config.estimatedMaxCostUsd,
+    } as const;
   }
 
   async analyze(input: TaskInput): Promise<TaskResult> {

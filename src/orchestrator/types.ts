@@ -17,11 +17,21 @@ export type SkillCategory =
 /** FASE 7. Default is always READ_ONLY. */
 export type ExecutionMode = "READ_ONLY" | "ASSISTED" | "AUTONOMOUS";
 
+/**
+ * Side-effect intent inferred before any provider call. UNKNOWN is deliberately
+ * fail-closed: an unclassified task must not be treated as read-only.
+ */
+export type EffectLevel = "READ" | "WRITE" | "EXTERNAL_ACTION" | "UNKNOWN";
+
 /** FASE 4. */
 export type AgentMode = "ONE_AGENT" | "MULTI_AGENT";
 
+export type ValidationStatus = "APPROVED" | "REJECTED" | "NEEDS_HUMAN";
+export type EvidenceStatus = "success" | "error" | "skipped" | "blocked";
+
 export interface ClassificationResult {
   skills: SkillCategory[];
+  effectLevel: EffectLevel;
   requiresGoogleWorkspace: boolean;
   requiresInvestigation: boolean;
   requiresImplementation: boolean;
@@ -52,6 +62,7 @@ export interface TaskPlan {
 /** FASE 8 — Evidence-First. Structured fields only, no private chain-of-thought. */
 export interface EvidenceRecord {
   task_id: string;
+  run_id?: string;
   project?: string;
   provider: ProviderName;
   model?: string;
@@ -60,6 +71,8 @@ export interface EvidenceRecord {
   sources: string[];
   evidence: string[];
   result: string;
+  status: EvidenceStatus;
+  reason?: string;
   confidence: number;
   timestamp: string;
   limitations?: string;
@@ -70,13 +83,14 @@ export interface EvidenceRecord {
 export interface OrchestrationRequest {
   task: string;
   project?: string;
-  mode?: "auto" | ExecutionMode;
 }
 
 export type StepStatus = "success" | "error" | "skipped";
 
 export interface StepExecutionResult {
   provider: ProviderName;
+  /** Original provider replaced by this provider after a controlled failure. */
+  fallbackFor?: ProviderName;
   purpose: string;
   status: StepStatus;
   /** Só presente quando status === "success". */
@@ -86,6 +100,7 @@ export interface StepExecutionResult {
 }
 
 export interface OrchestrationResult {
+  taskId: string;
   classification: ClassificationResult;
   context: ResolvedContext;
   routing: RoutingDecision;
@@ -98,7 +113,9 @@ export interface OrchestrationResult {
   evidence: EvidenceRecord[];
   validation?: {
     reviewed: boolean;
+    status: ValidationStatus;
     reviewer?: ProviderName;
+    summary: string;
     reviewOutput?: string;
   };
 }

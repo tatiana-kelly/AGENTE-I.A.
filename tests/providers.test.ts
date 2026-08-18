@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { AnthropicProvider } from "../src/providers/anthropic.js";
 import { GeminiProvider } from "../src/providers/gemini.js";
-import { ManusProvider } from "../src/providers/manus.js";
+import { ManusProvider, ManusTaskWaitingError } from "../src/providers/manus.js";
 import { OpenAIProvider } from "../src/providers/openai.js";
 import { ProviderHttpError } from "../src/providers/httpClient.js";
 
@@ -96,7 +97,7 @@ describe("ManusProvider", () => {
     fetchMock.mockReset();
   });
 
-  it("cria a task, faz poll até status=stopped e busca a última mensagem do assistant", async () => {
+  it("cria a task, faz poll e extrai assistant_message no schema oficial v2", async () => {
     fetchMock
       .mockResolvedValueOnce(
         jsonResponse({ ok: true, request_id: "r1", task_id: "task-1", task_title: "t", task_url: "https://manus.im/t/task-1" }),
@@ -106,10 +107,13 @@ describe("ManusProvider", () => {
       .mockResolvedValueOnce(
         jsonResponse({
           ok: true,
+          request_id: "r4",
+          task_id: "task-1",
           messages: [
-            { role: "user", content: [{ type: "text", text: "investigue isso" }] },
-            { role: "assistant", content: [{ type: "text", text: "achei a causa raiz" }] },
+            { id: "m2", timestamp: 2, type: "assistant_message", assistant_message: { content: "achei a causa raiz" } },
+            { id: "m1", timestamp: 1, type: "user_message", user_message: { content: "investigue isso" } },
           ],
+          has_more: false,
         }),
       );
 
@@ -122,6 +126,64 @@ describe("ManusProvider", () => {
     const [createUrl, createInit] = fetchMock.mock.calls[0];
     expect(createUrl).toBe("https://api.manus.ai/v2/task.create");
     expect(createInit.headers["x-manus-api-key"]).toBe("manus-test");
+    expect(fetchMock.mock.calls[3][0]).toContain("order=desc&limit=200");
+  });
+
+  it("segue paginação por cursor até encontrar o assistant_message", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ ok: true, request_id: "r1", task_id: "task-3", task_title: "t", task_url: "u" }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true, request_id: "r2", task: { id: "task-3", status: "stopped" } }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          request_id: "r3",
+          task_id: "task-3",
+          messages: [{ id: "s1", timestamp: 3, type: "status_update", status_update: { agent_status: "stopped" } }],
+          has_more: true,
+          next_cursor: "cursor-2",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          request_id: "r4",
+          task_id: "task-3",
+          messages: [{ id: "a1", timestamp: 2, type: "assistant_message", assistant_message: { content: "resultado paginado" } }],
+          has_more: false,
+        }),
+      );
+
+    const provider = new ManusProvider({ apiKey: "manus-test", pollIntervalMs: 1 });
+    const result = await provider.analyze({ taskId: "t1", prompt: "x" });
+
+    expect(result.output).toBe("resultado paginado");
+    expect(fetchMock.mock.calls[3][0]).toContain("cursor=cursor-2");
+  });
+
+  it("interrompe em waiting sem confirmar automaticamente", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ ok: true, request_id: "r1", task_id: "task-4", task_title: "t", task_url: "u" }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true, request_id: "r2", task: { id: "task-4", status: "waiting" } }));
+
+    const provider = new ManusProvider({ apiKey: "manus-test", pollIntervalMs: 1 });
+    await expect(provider.analyze({ taskId: "t1", prompt: "x" })).rejects.toBeInstanceOf(ManusTaskWaitingError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejeita fixture legado incompatível com o contrato oficial", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ ok: true, request_id: "r1", task_id: "task-5", task_title: "t", task_url: "u" }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true, request_id: "r2", task: { id: "task-5", status: "stopped" } }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, messages: [{ role: "assistant", content: [] }] }));
+
+    const provider = new ManusProvider({ apiKey: "manus-test", pollIntervalMs: 1 });
+    await expect(provider.analyze({ taskId: "t1", prompt: "x" })).rejects.toBeInstanceOf(z.ZodError);
   });
 
   it("lança erro se a task terminar com status=error", async () => {

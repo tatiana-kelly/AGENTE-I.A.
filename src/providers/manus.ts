@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { ProviderHttpError, describeProviderError, fetchJson } from "./httpClient.js";
 import type { AIProvider, HealthStatus, TaskInput, TaskResult } from "./types.js";
 
@@ -9,6 +10,7 @@ export interface ManusProviderConfig {
   timeoutMs?: number;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
+  estimatedMaxCostUsd?: number;
 }
 
 const DEFAULT_BASE_URL = "https://api.manus.ai";
@@ -16,52 +18,103 @@ const DEFAULT_AGENT_PROFILE = "manus-1.6";
 const DEFAULT_POLL_INTERVAL_MS = 3_000;
 const DEFAULT_POLL_TIMEOUT_MS = 5 * 60_000;
 
-interface CreateTaskResponse {
-  ok: boolean;
-  request_id: string;
-  task_id: string;
-  task_title: string;
-  task_url: string;
-  share_url?: string;
-}
+const createTaskResponseSchema = z.object({
+  ok: z.literal(true),
+  request_id: z.string(),
+  task_id: z.string(),
+  task_title: z.string(),
+  task_url: z.string(),
+  share_url: z.string().optional(),
+});
 
-interface TaskDetailResponse {
-  ok: boolean;
-  request_id: string;
-  task: {
-    id: string;
-    status: "running" | "stopped" | "waiting" | "error";
-    task_url: string;
-    title: string;
-  };
-}
+const taskDetailResponseSchema = z.object({
+  ok: z.literal(true),
+  request_id: z.string(),
+  task: z.object({
+    id: z.string(),
+    status: z.enum(["running", "stopped", "waiting", "error"]),
+    task_url: z.string().optional(),
+    title: z.string().optional(),
+    credit_usage: z.number().optional(),
+  }),
+});
 
-interface TaskMessage {
-  role: string;
-  content: Array<{ type: string; text?: string }>;
-}
+const attachmentSchema = z.object({
+  type: z.string().optional(),
+  filename: z.string(),
+  url: z.string(),
+  content_type: z.string(),
+});
 
-interface ListMessagesResponse {
-  ok: boolean;
-  messages: TaskMessage[];
+const taskMessageSchema = z
+  .object({
+    id: z.string(),
+    timestamp: z.number(),
+    type: z.enum([
+      "user_message",
+      "assistant_message",
+      "error_message",
+      "status_update",
+      "tool_used",
+      "plan_update",
+      "new_plan_step",
+      "explanation",
+      "user_stop",
+      "structured_output_result",
+    ]),
+    assistant_message: z
+      .object({ content: z.string(), attachments: z.array(attachmentSchema).optional() })
+      .optional(),
+    error_message: z.object({ error_type: z.string(), content: z.string() }).optional(),
+    status_update: z
+      .object({
+        agent_status: z.enum(["running", "stopped", "waiting", "error"]),
+        status_detail: z
+          .object({
+            waiting_for_event_id: z.string().optional(),
+            waiting_for_event_type: z.string().optional(),
+            waiting_description: z.string().optional(),
+          })
+          .passthrough()
+          .optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+const listMessagesResponseSchema = z.object({
+  ok: z.literal(true),
+  request_id: z.string(),
+  task_id: z.string(),
+  messages: z.array(taskMessageSchema),
+  has_more: z.boolean(),
+  next_cursor: z.string().optional(),
+});
+
+type CreateTaskResponse = z.infer<typeof createTaskResponseSchema>;
+type TaskDetailResponse = z.infer<typeof taskDetailResponseSchema>;
+
+export class ManusTaskWaitingError extends Error {
+  readonly requiresApproval = true;
+
+  constructor(public readonly taskId: string) {
+    super(`Task Manus ${taskId} aguarda confirmação ou entrada do usuário.`);
+    this.name = "ManusTaskWaitingError";
+  }
 }
 
 /**
  * Provider Manus (FASE 2/14) — prioridade em investigação, pesquisa
  * profunda, execução autônoma sobre ferramentas (FASE 3).
  *
- * Verificado contra a API v2 oficial em 2026-08-13
- * (open.manus.im/docs/api-reference/create-task e /get-task — PRP exige
- * explicitamente não usar API deprecated; v1 está deprecated, v2 é a
- * vigente). `POST /v2/task.create` e `GET /v2/task.detail` foram
- * confirmados na doc. O endpoint `task.listMessages` usado abaixo é
- * citado por nome na doc de `task.detail` ("Use task.listMessages for
- * full conversation history") mas seu schema de resposta não pôde ser
- * confirmado nesta sessão — **validar a forma exata de `messages[]`
- * contra uma chamada real antes de depender disso em produção.**
+   * Contrato atualizado contra a documentação oficial v2 em 2026-08-17:
+   * task.listMessages retorna eventos tipados (assistant_message,
+   * status_update etc.) e paginação por cursor.
  */
 export class ManusProvider implements AIProvider {
   readonly name = "manus" as const;
+  readonly capabilities;
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly agentProfile: string;
@@ -79,6 +132,10 @@ export class ManusProvider implements AIProvider {
     this.timeoutMs = config.timeoutMs;
     this.pollIntervalMs = config.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.pollTimeoutMs = config.pollTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS;
+    this.capabilities = {
+      mayProduceExternalEffects: true,
+      estimatedMaxCostUsd: config.estimatedMaxCostUsd,
+    } as const;
   }
 
   async analyze(input: TaskInput): Promise<TaskResult> {
@@ -126,7 +183,7 @@ export class ManusProvider implements AIProvider {
   }
 
   private async createTask(prompt: string): Promise<CreateTaskResponse> {
-    return fetchJson<CreateTaskResponse>(`${this.baseUrl}/v2/task.create`, {
+    const response = await fetchJson<unknown>(`${this.baseUrl}/v2/task.create`, {
       method: "POST",
       timeoutMs: this.timeoutMs,
       headers: {
@@ -138,18 +195,23 @@ export class ManusProvider implements AIProvider {
         agent_profile: this.agentProfile,
       }),
     });
+    return createTaskResponseSchema.parse(response);
   }
 
   private async pollUntilDone(taskId: string): Promise<TaskDetailResponse> {
     const deadline = Date.now() + this.pollTimeoutMs;
     for (;;) {
-      const detail = await fetchJson<TaskDetailResponse>(
+      const response = await fetchJson<unknown>(
         `${this.baseUrl}/v2/task.detail?task_id=${encodeURIComponent(taskId)}`,
         { timeoutMs: this.timeoutMs, headers: { "x-manus-api-key": this.apiKey } },
       );
+      const detail = taskDetailResponseSchema.parse(response);
 
       if (detail.task.status === "stopped" || detail.task.status === "error") {
         return detail;
+      }
+      if (detail.task.status === "waiting") {
+        throw new ManusTaskWaitingError(taskId);
       }
       if (Date.now() > deadline) {
         throw new Error(
@@ -161,20 +223,29 @@ export class ManusProvider implements AIProvider {
   }
 
   private async getFinalOutput(taskId: string): Promise<string> {
-    const list = await fetchJson<ListMessagesResponse>(
-      `${this.baseUrl}/v2/task.listMessages?task_id=${encodeURIComponent(taskId)}`,
-      { timeoutMs: this.timeoutMs, headers: { "x-manus-api-key": this.apiKey } },
-    );
+    let cursor: string | undefined;
 
-    const lastAssistantMessage = [...list.messages].reverse().find((message) => message.role === "assistant");
-    if (!lastAssistantMessage) {
-      return "";
+    for (;;) {
+      const params = new URLSearchParams({ task_id: taskId, order: "desc", limit: "200" });
+      if (cursor) params.set("cursor", cursor);
+
+      const response = await fetchJson<unknown>(`${this.baseUrl}/v2/task.listMessages?${params.toString()}`, {
+        timeoutMs: this.timeoutMs,
+        headers: { "x-manus-api-key": this.apiKey },
+      });
+      const list = listMessagesResponseSchema.parse(response);
+      const assistant = list.messages.find(
+        (message) => message.type === "assistant_message" && message.assistant_message?.content,
+      );
+      if (assistant?.assistant_message?.content) {
+        return assistant.assistant_message.content;
+      }
+
+      if (!list.has_more || !list.next_cursor) {
+        throw new Error(`Task Manus ${taskId} terminou sem evento assistant_message.`);
+      }
+      cursor = list.next_cursor;
     }
-
-    return lastAssistantMessage.content
-      .filter((block) => block.type === "text" && block.text)
-      .map((block) => block.text)
-      .join("\n");
   }
 }
 

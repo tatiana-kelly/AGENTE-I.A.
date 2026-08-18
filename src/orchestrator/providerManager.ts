@@ -1,4 +1,11 @@
-import type { AIProvider, HealthStatus, ProviderName, TaskInput, TaskResult } from "../providers/types.js";
+import type {
+  AIProvider,
+  HealthStatus,
+  ProviderCapabilities,
+  ProviderName,
+  TaskInput,
+  TaskResult,
+} from "../providers/types.js";
 
 export class ProviderNotRegisteredError extends Error {
   constructor(public readonly provider: ProviderName) {
@@ -22,6 +29,14 @@ export class ProviderManager {
 
   has(name: ProviderName): boolean {
     return this.providers.has(name);
+  }
+
+  capabilities(name: ProviderName): ProviderCapabilities {
+    const provider = this.providers.get(name);
+    if (!provider) {
+      throw new ProviderNotRegisteredError(name);
+    }
+    return provider.capabilities;
   }
 
   async healthCheckAll(): Promise<Partial<Record<ProviderName, HealthStatus>>> {
