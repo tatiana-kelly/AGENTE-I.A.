@@ -20,6 +20,13 @@ export default async function vercelHandler(request: IncomingMessage, response: 
 
 export function normalizeVercelUrl(url: string | undefined): string {
   if (!url || url === "/api") return "/";
+  const parsed = new URL(url, "http://orchestrator.local");
+  const rewrittenRoute = parsed.searchParams.get("route");
+  if (rewrittenRoute?.startsWith("/")) {
+    parsed.searchParams.delete("route");
+    const query = parsed.searchParams.toString();
+    return `${rewrittenRoute}${query ? `?${query}` : ""}`;
+  }
   return url.startsWith("/api/") ? url.slice("/api".length) : url;
 }
 

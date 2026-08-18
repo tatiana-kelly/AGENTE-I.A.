@@ -126,7 +126,7 @@ A continuação usa claim atômico para impedir replay, cria uma nova tarefa lig
 
 ### Deploy na Vercel
 
-O entrypoint serverless está em `api/[...path].ts`; `vercel.json` preserva os endpoints públicos acima e limita cada invocação a 300 segundos. Antes do primeiro deploy, configure como segredos da Vercel:
+O entrypoint serverless está em `api/index.ts`; `vercel.json` preserva os endpoints públicos acima e limita cada invocação a 300 segundos. Antes do primeiro deploy, configure como segredos da Vercel:
 
 - `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`;
 - `N8N_WEBHOOK_SECRET`, com pelo menos 32 caracteres;

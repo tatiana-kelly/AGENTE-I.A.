@@ -3,15 +3,15 @@
   "rewrites": [
     {
       "source": "/orchestrate",
-      "destination": "/api/orchestrate"
+      "destination": "/api/index?route=/orchestrate"
     },
     {
       "source": "/tasks/:path*",
-      "destination": "/api/tasks/:path*"
+      "destination": "/api/index?route=/tasks/:path*"
     }
   ],
   "functions": {
-    "api/[...path].ts": {
+    "api/index.ts": {
       "maxDuration": 300
     }
   }

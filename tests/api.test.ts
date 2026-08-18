@@ -152,7 +152,7 @@ describe("FASE 13 — API HTTP", () => {
 
 describe("Vercel adapter", () => {
   it("normaliza rotas serverless sem alterar rotas locais", () => {
-    expect(normalizeVercelUrl("/api/orchestrate?dryRun=true")).toBe("/orchestrate?dryRun=true");
+    expect(normalizeVercelUrl("/api/index?route=/orchestrate&trace=true")).toBe("/orchestrate?trace=true");
     expect(normalizeVercelUrl("/api/tasks/123/continue")).toBe("/tasks/123/continue");
     expect(normalizeVercelUrl("/orchestrate")).toBe("/orchestrate");
   });
