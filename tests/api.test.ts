@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createApiHandler } from "../src/api/app.js";
+import { normalizeVercelUrl } from "../src/api/vercel.js";
 import { ProviderManager } from "../src/orchestrator/providerManager.js";
 import { InMemoryOrchestrationRepository } from "../src/persistence/index.js";
 import type { AIProvider, HealthStatus, ProviderCapabilities, TaskInput, TaskResult } from "../src/providers/types.js";
@@ -146,6 +147,14 @@ describe("FASE 13 — API HTTP", () => {
     });
     expect(sufficientApproval.status).toBe(200);
     expect(anthropic.inputs).toHaveLength(1);
+  });
+});
+
+describe("Vercel adapter", () => {
+  it("normaliza rotas serverless sem alterar rotas locais", () => {
+    expect(normalizeVercelUrl("/api/orchestrate?dryRun=true")).toBe("/orchestrate?dryRun=true");
+    expect(normalizeVercelUrl("/api/tasks/123/continue")).toBe("/tasks/123/continue");
+    expect(normalizeVercelUrl("/orchestrate")).toBe("/orchestrate");
   });
 });
 

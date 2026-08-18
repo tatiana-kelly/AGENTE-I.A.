@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/orchestrate",
+      "destination": "/api/orchestrate"
+    },
+    {
+      "source": "/tasks/:path*",
+      "destination": "/api/tasks/:path*"
+    }
+  ],
+  "functions": {
+    "api/[...path].ts": {
+      "maxDuration": 300
+    }
+  }
+}

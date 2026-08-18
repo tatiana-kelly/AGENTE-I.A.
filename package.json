@@ -13,6 +13,7 @@
     "project:grant": "npm run build && node dist/cli/project.js grant",
     "mcp:start": "node dist/mcp/stdio.js",
     "typecheck": "tsc --noEmit",
+    "typecheck:vercel": "tsc -p tsconfig.vercel.json",
     "test": "vitest run",
     "test:watch": "vitest"
   },

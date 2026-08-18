@@ -124,6 +124,17 @@ Todos os endpoints exigem `Authorization: Bearer <N8N_WEBHOOK_SECRET>`; o segred
 
 A continuação usa claim atômico para impedir replay, cria uma nova tarefa ligada à original e registra origem, horário e limite de custo aprovado. Aprovar a ação não permite exceder esse valor nem o teto global da tarefa. O servidor de produção falha ao iniciar sem Supabase e sem `N8N_WEBHOOK_SECRET`.
 
+### Deploy na Vercel
+
+O entrypoint serverless está em `api/[...path].ts`; `vercel.json` preserva os endpoints públicos acima e limita cada invocação a 300 segundos. Antes do primeiro deploy, configure como segredos da Vercel:
+
+- `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`;
+- `N8N_WEBHOOK_SECRET`, com pelo menos 32 caracteres;
+- ao menos uma chave de provider e seu respectivo `*_MAX_COST_PER_CALL_USD`;
+- `ORCHESTRATOR_MODE=READ_ONLY` e `DRY_RUN=true` no primeiro rollout.
+
+Valide as duas formas de execução com `npm run typecheck`, `npm run typecheck:vercel`, `npm test` e `npm run build`. Segredos não pertencem ao Git nem a arquivos de deploy.
+
 ## Reaproveitamento conhecido (não redesenhar do zero)
 
 - **Persistência do Orchestrator**: é independente do `pendency-tracker`. Não acessar nem alterar aquele projeto; a FASE 11 deve criar somente as tabelas próprias deste repositório.
