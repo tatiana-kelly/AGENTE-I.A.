@@ -10,6 +10,9 @@ export interface ObservabilityRecord {
   duration_ms: number | "unknown";
   error: string | "unknown";
   cost_usd: number | "unknown";
+  /** Tokens medidos, reportados pela API do provider — "unknown" quando a resposta não traz a métrica. */
+  input_tokens: number | "unknown";
+  output_tokens: number | "unknown";
 }
 
 export interface LogSink {
@@ -35,6 +38,8 @@ export class Observability {
       duration_ms: partial.duration_ms ?? "unknown",
       error: partial.error ?? "unknown",
       cost_usd: partial.cost_usd ?? "unknown",
+      input_tokens: partial.input_tokens ?? "unknown",
+      output_tokens: partial.output_tokens ?? "unknown",
     });
   }
 }

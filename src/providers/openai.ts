@@ -16,6 +16,7 @@ const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 interface ChatCompletionResponse {
   choices: Array<{ message: { content: string | null }; finish_reason: string }>;
   model: string;
+  usage?: { prompt_tokens: number; completion_tokens: number };
 }
 
 interface ModelsListResponse {
@@ -63,10 +64,23 @@ export class OpenAIProvider implements AIProvider {
       }),
     });
 
+    // Mesma classe de bug do fix a6e1440: "length" = resposta cortada pelo
+    // limite de tokens — erro claro em vez de output truncado silencioso.
+    const choice = response.choices[0];
+    if (choice?.finish_reason === "length") {
+      throw new Error(
+        "Resposta da OpenAI truncada pelo limite de tokens (finish_reason=length). " +
+          "O output parcial não é entregue — reduza o escopo da tarefa ou aumente o limite.",
+      );
+    }
+
     return {
-      output: response.choices[0]?.message.content ?? "",
+      output: choice?.message.content ?? "",
       sources: [],
       evidence: [],
+      usage: response.usage
+        ? { inputTokens: response.usage.prompt_tokens, outputTokens: response.usage.completion_tokens }
+        : undefined,
       raw: response,
     };
   }

@@ -243,7 +243,14 @@ export async function orchestrate(
 
       const durationMs = performance.now() - start;
       results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "success", output: result.output });
-      observability.log({ task_id: runId, provider: candidate, status: "success", duration_ms: Math.round(durationMs) });
+      observability.log({
+        task_id: runId,
+        provider: candidate,
+        status: "success",
+        duration_ms: Math.round(durationMs),
+        input_tokens: result.usage?.inputTokens ?? "unknown",
+        output_tokens: result.usage?.outputTokens ?? "unknown",
+      });
       await repository?.updateRun(runId, {
         status: "success",
         output: result.output,

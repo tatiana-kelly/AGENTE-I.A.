@@ -19,6 +19,9 @@ const ANTHROPIC_VERSION = "2023-06-01";
 interface MessagesResponse {
   content: Array<{ type: string; text?: string }>;
   model: string;
+  /** "end_turn" | "max_tokens" | "stop_sequence" | ... — max_tokens = resposta cortada. */
+  stop_reason?: string;
+  usage?: { input_tokens: number; output_tokens: number };
 }
 
 interface ModelsListResponse {
@@ -70,12 +73,29 @@ export class AnthropicProvider implements AIProvider {
       }),
     });
 
+    // Porta do fix a6e1440 (lado Python): resposta cortada por max_tokens
+    // vira erro claro, nunca um output truncado entregue como completo.
+    if (response.stop_reason === "max_tokens") {
+      throw new Error(
+        `Resposta da Anthropic truncada por max_tokens (${this.maxTokens}). ` +
+          "Aumente maxTokens no AnthropicProviderConfig ou reduza o escopo da tarefa — o output parcial não é entregue.",
+      );
+    }
+
     const output = response.content
       .filter((block) => block.type === "text" && block.text)
       .map((block) => block.text)
       .join("\n");
 
-    return { output, sources: [], evidence: [], raw: response };
+    return {
+      output,
+      sources: [],
+      evidence: [],
+      usage: response.usage
+        ? { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
+        : undefined,
+      raw: response,
+    };
   }
 
   async healthCheck(): Promise<HealthStatus> {

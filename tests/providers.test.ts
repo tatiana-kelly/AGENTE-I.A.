@@ -65,6 +65,79 @@ describe("AnthropicProvider", () => {
     expect(init.headers["x-api-key"]).toBe("ant-test");
     expect(init.headers["anthropic-version"]).toBe("2023-06-01");
   });
+
+  it("lança erro claro quando a resposta é truncada por max_tokens — nunca entrega output parcial (porta do fix a6e1440)", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        content: [{ type: "text", text: "resposta cortada no mei" }],
+        model: "claude-sonnet-5",
+        stop_reason: "max_tokens",
+      }),
+    );
+
+    const provider = new AnthropicProvider({ apiKey: "ant-test" });
+    await expect(provider.analyze({ taskId: "t1", prompt: "oi" })).rejects.toThrow(/truncada por max_tokens/);
+  });
+
+  it("captura usage real (tokens) reportado pela API — ausente vira undefined, nunca zero", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        content: [{ type: "text", text: "ok" }],
+        model: "claude-sonnet-5",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 120, output_tokens: 45 },
+      }),
+    );
+
+    const provider = new AnthropicProvider({ apiKey: "ant-test" });
+    const result = await provider.analyze({ taskId: "t1", prompt: "oi" });
+
+    expect(result.usage).toEqual({ inputTokens: 120, outputTokens: 45 });
+  });
+});
+
+describe("truncamento e usage nos demais providers (mesma classe de bug do fix a6e1440)", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => vi.stubGlobal("fetch", fetchMock));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    fetchMock.mockReset();
+  });
+
+  it("OpenAI: finish_reason=length vira erro; usage é capturado no caso normal", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ choices: [{ message: { content: "cortad" }, finish_reason: "length" }], model: "gpt-4o-mini" }),
+    );
+    const provider = new OpenAIProvider({ apiKey: "sk-test" });
+    await expect(provider.analyze({ taskId: "t1", prompt: "oi" })).rejects.toThrow(/finish_reason=length/);
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        choices: [{ message: { content: "ok" }, finish_reason: "stop" }],
+        model: "gpt-4o-mini",
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      }),
+    );
+    const result = await provider.analyze({ taskId: "t2", prompt: "oi" });
+    expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5 });
+  });
+
+  it("Gemini: finishReason=MAX_TOKENS vira erro; usageMetadata é capturado no caso normal", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: "cortad" }] }, finishReason: "MAX_TOKENS" }] }),
+    );
+    const provider = new GeminiProvider({ apiKey: "gem-test" });
+    await expect(provider.analyze({ taskId: "t1", prompt: "oi" })).rejects.toThrow(/MAX_TOKENS/);
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        candidates: [{ content: { parts: [{ text: "ok" }] }, finishReason: "STOP" }],
+        usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 3 },
+      }),
+    );
+    const result = await provider.analyze({ taskId: "t2", prompt: "oi" });
+    expect(result.usage).toEqual({ inputTokens: 8, outputTokens: 3 });
+  });
 });
 
 describe("GeminiProvider", () => {
