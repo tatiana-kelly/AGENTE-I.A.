@@ -34,6 +34,15 @@ export function buildProviderManagerFromEnv(env: NodeJS.ProcessEnv = process.env
       new OpenAIProvider({
         apiKey: env.OPENAI_API_KEY,
         model: env.OPENAI_MODEL,
+        models: {
+          fast: env.OPENAI_MODEL_FAST,
+          balanced: env.OPENAI_MODEL_BALANCED,
+          critical: env.OPENAI_MODEL_CRITICAL,
+          adversarial: env.OPENAI_MODEL_ADVERSARIAL,
+          builder: env.OPENAI_MODEL_BUILDER,
+        },
+        reasoningEffort: parseOpenAIReasoningEffort(env.OPENAI_REASONING_EFFORT),
+        maxOutputTokens: numberOrUndefined(env.OPENAI_MAX_OUTPUT_TOKENS),
         estimatedMaxCostUsd: numberOrUndefined(env.OPENAI_MAX_COST_PER_CALL_USD),
       }),
     );
@@ -47,6 +56,15 @@ export function buildProviderManagerFromEnv(env: NodeJS.ProcessEnv = process.env
       new AnthropicProvider({
         apiKey: env.ANTHROPIC_API_KEY,
         model: env.ANTHROPIC_MODEL,
+        models: {
+          fast: env.ANTHROPIC_MODEL_FAST,
+          balanced: env.ANTHROPIC_MODEL_BALANCED,
+          critical: env.ANTHROPIC_MODEL_CRITICAL,
+          adversarial: env.ANTHROPIC_MODEL_ADVERSARIAL,
+          builder: env.ANTHROPIC_MODEL_BUILDER,
+        },
+        effort: parseAnthropicEffort(env.ANTHROPIC_EFFORT),
+        maxTokens: numberOrUndefined(env.ANTHROPIC_MAX_OUTPUT_TOKENS),
         estimatedMaxCostUsd: numberOrUndefined(env.ANTHROPIC_MAX_COST_PER_CALL_USD),
       }),
     );
@@ -90,4 +108,20 @@ function numberOrUndefined(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseOpenAIReasoningEffort(
+  value: string | undefined,
+): "none" | "low" | "medium" | "high" | "xhigh" | "max" | undefined {
+  return value === "none" || value === "low" || value === "medium" || value === "high" || value === "xhigh" || value === "max"
+    ? value
+    : undefined;
+}
+
+function parseAnthropicEffort(
+  value: string | undefined,
+): "low" | "medium" | "high" | "xhigh" | "max" | undefined {
+  return value === "low" || value === "medium" || value === "high" || value === "xhigh" || value === "max"
+    ? value
+    : undefined;
 }

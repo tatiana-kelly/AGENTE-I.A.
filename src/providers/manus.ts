@@ -158,9 +158,9 @@ export class ManusProvider implements AIProvider {
 
   async healthCheck(): Promise<HealthStatus> {
     // Não há endpoint de health dedicado documentado — usamos task.detail
-    // com um task_id inexistente. Um 4xx estruturado prova que a API key
-    // e o endpoint respondem; só um erro de rede/timeout conta como
-    // "unhealthy" de fato.
+    // com um task_id inexistente. Somente 400/404 são aceitos como prova
+    // contratual de que o endpoint autenticado respondeu. 401/403 e 429
+    // não podem ser tratados como credencial saudável.
     const checkedAt = new Date().toISOString();
     const start = performance.now();
     try {
@@ -170,7 +170,7 @@ export class ManusProvider implements AIProvider {
       });
       return { healthy: true, latencyMs: performance.now() - start, checkedAt };
     } catch (error) {
-      if (error instanceof ProviderHttpError && error.status < 500) {
+      if (error instanceof ProviderHttpError && (error.status === 400 || error.status === 404)) {
         return {
           healthy: true,
           latencyMs: performance.now() - start,

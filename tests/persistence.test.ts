@@ -120,6 +120,7 @@ describe("FASE 11 — persistência", () => {
         requiresInvestigation: false,
         requiresImplementation: false,
         requiresDecision: false,
+        requiresAdversarialReview: false,
         rationale: "teste",
       },
       routing: { primary: "openai", reason: "teste", confidence: 1 },
@@ -140,5 +141,30 @@ describe("FASE 11 — persistência", () => {
       Authorization: "Bearer test-service-role-key",
     });
     expect(JSON.parse(init.body as string)).toMatchObject({ task_text: "Analise os dados.", status: "received" });
+  });
+
+  it("consulta memória persistida por fonte e janela de validade sem migration nova", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    const repository = new SupabaseOrchestrationRepository({
+      url: "https://example.supabase.co",
+      serviceRoleKey: "test-service-role-key",
+      fetchImpl: fetchMock,
+    });
+
+    const result = await repository.findReusableTaskByEvidenceSource(
+      "sal-memory://v1/abc123",
+      "2026-08-12T00:00:00.000Z",
+    );
+
+    expect(result).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const decodedUrl = decodeURIComponent(url);
+    expect(decodedUrl).toContain("/rest/v1/ai_evidence?");
+    expect(decodedUrl).toContain('sources=cs.{"sal-memory://v1/abc123"}');
+    expect(decodedUrl).toContain("recorded_at=gte.2026-08-12T00:00:00.000Z");
+    expect(init.method).toBe("GET");
   });
 });

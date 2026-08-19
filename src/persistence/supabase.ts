@@ -40,6 +40,7 @@ const classificationSchema = z.object({
   requiresInvestigation: z.boolean(),
   requiresImplementation: z.boolean(),
   requiresDecision: z.boolean(),
+  requiresAdversarialReview: z.boolean().default(false),
   rationale: z.string(),
 });
 const routingSchema = z.object({
@@ -51,7 +52,11 @@ const routingSchema = z.object({
 });
 const planSchema = z.object({
   mode: z.enum(["ONE_AGENT", "MULTI_AGENT"]),
-  steps: z.array(z.object({ provider: providerNameSchema, purpose: z.string() })),
+  steps: z.array(z.object({
+    provider: providerNameSchema,
+    purpose: z.string(),
+    modelProfile: z.enum(["fast", "balanced", "critical", "adversarial", "builder"]).optional(),
+  })),
 });
 const validationSchema = z.object({
   reviewed: z.boolean(),
@@ -213,6 +218,23 @@ export class SupabaseOrchestrationRepository implements OrchestrationRepository 
       runs: z.array(runRowSchema).parse(runRows).map(fromRunRow),
       evidence: z.array(evidenceRowSchema).parse(evidenceRows).map(fromEvidenceRow),
     };
+  }
+
+  async findReusableTaskByEvidenceSource(source: string, newerThan: string): Promise<PersistedTaskSnapshot | undefined> {
+    const query = new URLSearchParams({
+      status: "eq.success",
+      recorded_at: `gte.${newerThan}`,
+      sources: `cs.{${JSON.stringify(source)}}`,
+      select: "*",
+      order: "recorded_at.desc",
+      limit: "20",
+    });
+    const rows = z.array(evidenceRowSchema).parse(await this.requestJson(`ai_evidence?${query.toString()}`));
+    for (const row of rows) {
+      const snapshot = await this.getTask(row.task_id);
+      if (snapshot?.task.status === "completed") return snapshot;
+    }
+    return undefined;
   }
 
   async upsertProject(project: ProjectRecord): Promise<void> {

@@ -15,6 +15,14 @@ import { validateResult } from "./validationEngine.js";
 import { buildEvidenceRecord, InMemoryEvidenceSink, type EvidenceSink } from "./evidenceManager.js";
 import { CostController, loadCostControlConfigFromEnv } from "./costController.js";
 import { Observability } from "./observability.js";
+import {
+  buildResultMemoryKey,
+  loadResultMemoryConfigFromEnv,
+  lookupReusableResult,
+  reusableArtifact,
+  resultMemorySource,
+  type ResultMemoryConfig,
+} from "./memoryController.js";
 import type { EvidenceRecord, OrchestrationRequest, OrchestrationResult, StepExecutionResult } from "./types.js";
 
 export interface OrchestrateOptions {
@@ -28,6 +36,7 @@ export interface OrchestrateOptions {
   approvedMaxCostUsd?: number;
   observability?: Observability;
   costController?: CostController;
+  resultMemory?: ResultMemoryConfig;
 }
 
 /**
@@ -49,11 +58,14 @@ export async function orchestrate(
   const evidenceSink = combineEvidenceSinks(repository, options.evidenceSink);
   const observability = options.observability ?? new Observability();
   const costController = options.costController ?? new CostController(loadCostControlConfigFromEnv());
+  const resultMemory = options.resultMemory ?? loadResultMemoryConfigFromEnv();
 
   const context = await resolveContext(request.project, options.projectsRoot);
   const classification = classifyTask(request.task);
   const routing = routeTask(classification);
   const plan = planTask(classification, routing);
+  const memoryKey = buildResultMemoryKey({ request, context, classification, plan });
+  const memorySource = resultMemorySource(memoryKey);
   const results: StepExecutionResult[] = [];
   const evidence: EvidenceRecord[] = [];
   const taskId = randomUUID();
@@ -71,6 +83,13 @@ export async function orchestrate(
     requiresApproval: gate.requiresApproval || !gate.allowed,
     results,
     evidence,
+    memory: {
+      status: classification.effectLevel === "READ" ? "miss" : "ineligible",
+      key: memoryKey,
+      reason: classification.effectLevel === "READ"
+        ? "Memória ainda não consultada."
+        : "Somente tarefas READ podem reutilizar resultados.",
+    },
   };
 
   const createdAt = new Date().toISOString();
@@ -142,6 +161,89 @@ export async function orchestrate(
     requiresApproval: base.requiresApproval,
     updatedAt: new Date().toISOString(),
   });
+
+  const memoryLookup = await lookupReusableResult(
+    repository,
+    request,
+    classification,
+    memoryKey,
+    resultMemory,
+  ).catch((error: unknown) => ({
+    key: memoryKey,
+    source: memorySource,
+    snapshot: undefined,
+    reason: `Consulta de memória indisponível; execução normal preservada: ${error instanceof Error ? error.message : String(error)}`,
+  }));
+  const reusable = memoryLookup.snapshot ? reusableArtifact(memoryLookup.snapshot) : undefined;
+  base.memory = {
+    status: reusable
+      ? "hit"
+      : classification.effectLevel !== "READ"
+        ? "ineligible"
+        : !resultMemory.enabled || request.reusePolicy === "refresh"
+          ? "bypassed"
+          : "miss",
+    key: memoryKey,
+    reason: reusable ? memoryLookup.reason : memoryLookup.snapshot ? "Resultado anterior não possui artefato final reutilizável." : memoryLookup.reason,
+    reusedFromTaskId: reusable ? memoryLookup.snapshot?.task.id : undefined,
+  };
+
+  if (reusable && memoryLookup.snapshot) {
+    const runId = randomUUID();
+    const purpose = `Reutilização segura do resultado aprovado da tarefa ${memoryLookup.snapshot.task.id}.`;
+    const output = reusable.run.output as string;
+    const reusedResult: StepExecutionResult = {
+      provider: reusable.run.provider,
+      purpose,
+      status: "success",
+      output,
+      reusedFromTaskId: memoryLookup.snapshot.task.id,
+    };
+    results.push(reusedResult);
+    await persistFinishedRun(repository, {
+      runId,
+      taskId,
+      stepIndex: 0,
+      provider: reusable.run.provider,
+      purpose,
+      status: "success",
+      output,
+      reason: "Cache hit persistente: nenhuma chamada de provider executada.",
+    });
+    const record = buildEvidenceRecord({
+      taskId,
+      runId,
+      project: request.project,
+      provider: reusable.run.provider,
+      model: reusable.evidence?.model,
+      skill: classification.skills[0],
+      routingReason: "Resultado persistido, vigente e previamente aprovado reutilizado pelo Memory Controller.",
+      result: {
+        output,
+        sources: [...new Set([...(reusable.evidence?.sources ?? []), memorySource, `sal-memory-reuse://${memoryLookup.snapshot.task.id}`])],
+        evidence: reusable.evidence?.evidence ?? [],
+        confidence: reusable.evidence?.confidence,
+      },
+      confidence: reusable.evidence?.confidence ?? routing.confidence,
+      timestamp: new Date().toISOString(),
+      limitations: `Reutilizado sem custo de IA; validade controlada por RESULT_MEMORY_MAX_AGE_HOURS=${resultMemory.maxAgeHours}.`,
+    });
+    await evidenceSink.record(record);
+    evidence.push(record);
+    const validation = memoryLookup.snapshot.task.validation;
+    await repository?.updateTask(taskId, {
+      status: "completed",
+      requiresApproval: false,
+      validation,
+      updatedAt: new Date().toISOString(),
+    });
+    return {
+      ...base,
+      results,
+      evidence,
+      validation: validation ? { ...validation } : undefined,
+    };
+  }
 
   let lastSuccessful: { provider: ProviderName; result: TaskResult } | undefined;
   let planCompleted = true;
@@ -221,6 +323,7 @@ export async function orchestrate(
             previousResults: successfulOutputs(results),
           },
           skill: classification.skills[0],
+          modelProfile: step.modelProfile,
         });
       } catch (error) {
         const durationMs = performance.now() - start;
@@ -257,7 +360,8 @@ export async function orchestrate(
         provider: candidate,
         skill: classification.skills[0],
         routingReason: routing.reason,
-        result,
+        result: { ...result, sources: [...new Set([...result.sources, memorySource])] },
+        model: result.model,
         confidence: routing.confidence,
         timestamp: new Date().toISOString(),
         limitations: `Custo máximo reservado acumulado: US$ ${reservedCostUsd.toFixed(2)}.`,
@@ -291,6 +395,7 @@ export async function orchestrate(
         project: request.project,
         context: { projectFiles: context.loaded, previousResults: successfulOutputs(results) },
         skill: classification.skills[0],
+        modelProfile: "critical",
       },
       lastSuccessful.result,
       {
@@ -369,6 +474,7 @@ export async function orchestrate(
         skill: classification.skills[0],
         routingReason: `Revisão do resultado de ${lastSuccessful.provider} (FASE 9).`,
         result: outcome.reviewResult,
+        model: outcome.reviewResult.model,
         confidence: routing.confidence,
         timestamp: new Date().toISOString(),
       });
@@ -511,4 +617,11 @@ export { buildEvidenceRecord, InMemoryEvidenceSink } from "./evidenceManager.js"
 export { CostController, loadCostControlConfigFromEnv } from "./costController.js";
 export { evaluateExecution, loadExecutionModeFromEnv } from "./securityLayer.js";
 export { Observability, ConsoleLogSink } from "./observability.js";
+export {
+  buildResultMemoryKey,
+  loadResultMemoryConfigFromEnv,
+  lookupReusableResult,
+  reusableArtifact,
+  resultMemorySource,
+} from "./memoryController.js";
 export * from "../persistence/index.js";

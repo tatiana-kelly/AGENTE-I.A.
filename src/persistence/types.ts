@@ -119,6 +119,7 @@ export interface OrchestrationRepository {
   updateRun(runId: string, update: OrchestrationRunUpdate): Promise<void>;
   record(evidence: EvidenceRecord): Promise<void>;
   getTask(taskId: string): Promise<PersistedTaskSnapshot | undefined>;
+  findReusableTaskByEvidenceSource(source: string, newerThan: string): Promise<PersistedTaskSnapshot | undefined>;
   upsertProject(project: ProjectRecord): Promise<void>;
   getProject(projectId: string): Promise<ProjectRecord | undefined>;
   listProjects(): Promise<ProjectRecord[]>;

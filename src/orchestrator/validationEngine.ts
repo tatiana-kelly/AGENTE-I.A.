@@ -93,6 +93,7 @@ export async function validateResult(
       project: taskInput.project,
       context: taskInput.context,
       skill: taskInput.skill,
+      modelProfile: "critical",
     });
     const parsed = parseReview(reviewResult.output);
     if (!parsed) {

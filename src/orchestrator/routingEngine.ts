@@ -49,6 +49,16 @@ export function routeTask(classification: ClassificationResult): RoutingDecision
   const { skills, requiresGoogleWorkspace, requiresInvestigation, requiresImplementation, requiresDecision } =
     classification;
 
+  if (classification.requiresAdversarialReview) {
+    return {
+      primary: "openai",
+      reviewer: "anthropic",
+      reason: "Auditoria adversarial: GPT-5.6 Sol lidera/arbitra e Claude Fable 5 contesta.",
+      confidence: 0.95,
+      fallback: "anthropic",
+    };
+  }
+
   if (requiresGoogleWorkspace) {
     return {
       primary: "gemini",

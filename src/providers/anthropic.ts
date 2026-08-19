@@ -1,5 +1,5 @@
 import { describeProviderError, fetchJson } from "./httpClient.js";
-import type { AIProvider, HealthStatus, TaskInput, TaskResult } from "./types.js";
+import type { AIProvider, HealthStatus, ModelProfile, TaskInput, TaskResult } from "./types.js";
 
 export interface AnthropicProviderConfig {
   apiKey: string;
@@ -9,6 +9,8 @@ export interface AnthropicProviderConfig {
   timeoutMs?: number;
   maxTokens?: number;
   estimatedMaxCostUsd?: number;
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  models?: Partial<Record<ModelProfile, string>>;
 }
 
 const DEFAULT_MODEL = "claude-sonnet-5";
@@ -19,6 +21,7 @@ const ANTHROPIC_VERSION = "2023-06-01";
 interface MessagesResponse {
   content: Array<{ type: string; text?: string }>;
   model: string;
+  stop_reason?: string | null;
 }
 
 interface ModelsListResponse {
@@ -38,6 +41,8 @@ export class AnthropicProvider implements AIProvider {
   private readonly baseUrl: string;
   private readonly timeoutMs?: number;
   private readonly maxTokens: number;
+  private readonly effort: "low" | "medium" | "high" | "xhigh" | "max";
+  private readonly models: Record<ModelProfile, string>;
 
   constructor(config: AnthropicProviderConfig) {
     if (!config.apiKey) {
@@ -48,6 +53,14 @@ export class AnthropicProvider implements AIProvider {
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.timeoutMs = config.timeoutMs;
     this.maxTokens = config.maxTokens ?? DEFAULT_MAX_TOKENS;
+    this.effort = config.effort ?? "medium";
+    this.models = {
+      fast: config.models?.fast ?? "claude-sonnet-5",
+      balanced: config.models?.balanced ?? config.model ?? "claude-sonnet-5",
+      critical: config.models?.critical ?? "claude-opus-5",
+      adversarial: config.models?.adversarial ?? "claude-fable-5",
+      builder: config.models?.builder ?? "claude-opus-5",
+    };
     this.capabilities = {
       mayProduceExternalEffects: false,
       estimatedMaxCostUsd: config.estimatedMaxCostUsd,
@@ -55,6 +68,7 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async analyze(input: TaskInput): Promise<TaskResult> {
+    const model = this.models[input.modelProfile ?? "balanced"];
     const response = await fetchJson<MessagesResponse>(`${this.baseUrl}/messages`, {
       method: "POST",
       timeoutMs: this.timeoutMs,
@@ -64,18 +78,26 @@ export class AnthropicProvider implements AIProvider {
         "anthropic-version": ANTHROPIC_VERSION,
       },
       body: JSON.stringify({
-        model: this.model,
+        model,
         max_tokens: this.maxTokens,
+        thinking: { type: "adaptive" },
+        output_config: { effort: this.effort },
         messages: [{ role: "user", content: input.prompt }],
       }),
     });
+
+    if (response.stop_reason === "max_tokens") {
+      throw new Error(
+        `Resposta Anthropic truncada em max_tokens=${this.maxTokens}; o resultado incompleto foi descartado.`,
+      );
+    }
 
     const output = response.content
       .filter((block) => block.type === "text" && block.text)
       .map((block) => block.text)
       .join("\n");
 
-    return { output, sources: [], evidence: [], raw: response };
+    return { output, model: response.model ?? model, sources: [], evidence: [], raw: response };
   }
 
   async healthCheck(): Promise<HealthStatus> {
