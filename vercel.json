@@ -8,6 +8,18 @@
     {
       "source": "/tasks/:path*",
       "destination": "/api/index?route=/tasks/:path*"
+    },
+    {
+      "source": "/mcp",
+      "destination": "/api/index?route=/mcp"
+    },
+    {
+      "source": "/oauth/:path*",
+      "destination": "/api/index?route=/oauth/:path*"
+    },
+    {
+      "source": "/.well-known/:path*",
+      "destination": "/api/index?route=/.well-known/:path*"
     }
   ],
   "functions": {
