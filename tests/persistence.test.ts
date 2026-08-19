@@ -120,6 +120,7 @@ describe("FASE 11 — persistência", () => {
         requiresInvestigation: false,
         requiresImplementation: false,
         requiresDecision: false,
+        requiresAdversarialReview: false,
         rationale: "teste",
       },
       routing: { primary: "openai", reason: "teste", confidence: 1 },

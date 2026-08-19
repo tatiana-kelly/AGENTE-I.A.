@@ -221,6 +221,7 @@ export async function orchestrate(
             previousResults: successfulOutputs(results),
           },
           skill: classification.skills[0],
+          modelProfile: step.modelProfile,
         });
       } catch (error) {
         const durationMs = performance.now() - start;
@@ -258,6 +259,7 @@ export async function orchestrate(
         skill: classification.skills[0],
         routingReason: routing.reason,
         result,
+        model: result.model,
         confidence: routing.confidence,
         timestamp: new Date().toISOString(),
         limitations: `Custo máximo reservado acumulado: US$ ${reservedCostUsd.toFixed(2)}.`,
@@ -291,6 +293,7 @@ export async function orchestrate(
         project: request.project,
         context: { projectFiles: context.loaded, previousResults: successfulOutputs(results) },
         skill: classification.skills[0],
+        modelProfile: "critical",
       },
       lastSuccessful.result,
       {
@@ -369,6 +372,7 @@ export async function orchestrate(
         skill: classification.skills[0],
         routingReason: `Revisão do resultado de ${lastSuccessful.provider} (FASE 9).`,
         result: outcome.reviewResult,
+        model: outcome.reviewResult.model,
         confidence: routing.confidence,
         timestamp: new Date().toISOString(),
       });

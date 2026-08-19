@@ -12,6 +12,20 @@ function decide(task: string) {
 
 // FASE 18 — casos de teste de routing definidos no próprio PRP-003.
 describe("FASE 18 — routing examples", () => {
+  it("monta auditoria GPT-5.6 Sol → Fable 5 → GPT-5.6 Sol", () => {
+    const { classification, routing, plan } = decide(
+      "Faça uma auditoria técnica adversarial completa deste projeto.",
+    );
+
+    expect(classification.effectLevel).toBe("READ");
+    expect(classification.requiresAdversarialReview).toBe(true);
+    expect(routing).toMatchObject({ primary: "openai", reviewer: "anthropic" });
+    expect(plan.steps).toEqual([
+      expect.objectContaining({ provider: "openai", modelProfile: "critical" }),
+      expect.objectContaining({ provider: "anthropic", modelProfile: "adversarial" }),
+      expect.objectContaining({ provider: "openai", modelProfile: "critical" }),
+    ]);
+  });
   it('"Me ajude a tomar uma decisão estratégica." → OPENAI', () => {
     expect(decide("Me ajude a tomar uma decisão estratégica.").routing.primary).toBe("openai");
   });

@@ -26,6 +26,20 @@ O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION
 
 **Único provider ativo hoje: Anthropic** (única chave de IA encontrada no ecossistema local — ver `DISCOVERY-REPORT.md`). OpenAI/Manus/Gemini estão implementados mas sem chave configurada.
 
+### Política de modelos por papel
+
+O Router seleciona um `modelProfile` por etapa, sem transformar cada modelo em um provider diferente:
+
+| Perfil | OpenAI | Anthropic | Uso |
+|---|---|---|---|
+| `fast` | GPT-5.6 Luna | Claude Sonnet 5 | triagem e tarefas curtas |
+| `balanced` | GPT-5.6 Terra | Claude Sonnet 5 | análises e trabalho cotidiano |
+| `critical` | GPT-5.6 Sol | Claude Opus 5 | decisões, revisão e implementação complexa |
+| `adversarial` | GPT-5.6 Sol | Claude Fable 5 | contra-análise e auditoria adversarial |
+| `builder` | GPT-5.6 Sol | Claude Opus 5 | construção complexa; Fable fica reservado a trabalho explicitamente adversarial/long-horizon |
+
+Uma tarefa reconhecida como auditoria adversarial usa a cadeia `GPT-5.6 Sol → Claude Fable 5 → GPT-5.6 Sol`. Os limites de saída continuam explícitos e o Cost Controller reserva custo antes de cada chamada.
+
 ⚠️ **Teste real histórico** (`scripts/real-test.mjs`) — chegou à API Anthropic, mas falhou por falta de crédito antes de validar o caminho de sucesso. Ver [REAL-TEST-REPORT.md](REAL-TEST-REPORT.md). Precisa ser repetido após configurar billing e `ANTHROPIC_MAX_COST_PER_CALL_USD`.
 
 ⚠️ **Manus**: o adapter foi alinhado em 2026-08-17 ao schema oficial v2 de eventos de `task.listMessages`, incluindo paginação e estado `waiting`. Fixtures no formato legado agora são rejeitados. Ainda é obrigatório um teste contratual real antes de ativá-lo em produção.

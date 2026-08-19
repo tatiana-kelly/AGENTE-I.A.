@@ -1,4 +1,4 @@
-import type { ProviderName } from "../providers/types.js";
+import type { ModelProfile, ProviderName } from "../providers/types.js";
 import type { ResolvedContext } from "./contextResolver.js";
 
 /** FASE 6 skill catalog. */
@@ -36,6 +36,7 @@ export interface ClassificationResult {
   requiresInvestigation: boolean;
   requiresImplementation: boolean;
   requiresDecision: boolean;
+  requiresAdversarialReview: boolean;
   /** Short justification only — never chain-of-thought (FASE 8). */
   rationale: string;
 }
@@ -52,6 +53,7 @@ export interface RoutingDecision {
 export interface PlanStep {
   provider: ProviderName;
   purpose: string;
+  modelProfile?: ModelProfile;
 }
 
 export interface TaskPlan {

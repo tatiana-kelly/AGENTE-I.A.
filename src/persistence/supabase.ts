@@ -40,6 +40,7 @@ const classificationSchema = z.object({
   requiresInvestigation: z.boolean(),
   requiresImplementation: z.boolean(),
   requiresDecision: z.boolean(),
+  requiresAdversarialReview: z.boolean().default(false),
   rationale: z.string(),
 });
 const routingSchema = z.object({
@@ -51,7 +52,11 @@ const routingSchema = z.object({
 });
 const planSchema = z.object({
   mode: z.enum(["ONE_AGENT", "MULTI_AGENT"]),
-  steps: z.array(z.object({ provider: providerNameSchema, purpose: z.string() })),
+  steps: z.array(z.object({
+    provider: providerNameSchema,
+    purpose: z.string(),
+    modelProfile: z.enum(["fast", "balanced", "critical", "adversarial", "builder"]).optional(),
+  })),
 });
 const validationSchema = z.object({
   reviewed: z.boolean(),

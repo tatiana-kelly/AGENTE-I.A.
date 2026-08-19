@@ -33,12 +33,28 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
 
     if (!response.ok) {
       const detail = typeof body === "string" ? body : JSON.stringify(body);
-      throw new ProviderHttpError(response.status, body, `HTTP ${response.status} de ${url}: ${detail}`);
+      throw new ProviderHttpError(
+        response.status,
+        body,
+        `HTTP ${response.status} de ${sanitizeUrlForLogs(url)}: ${detail}`,
+      );
     }
 
     return body as T;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/** Removes query-string credentials and fragments before a URL reaches logs or evidence. */
+export function sanitizeUrlForLogs(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "[invalid-url]";
   }
 }
 
