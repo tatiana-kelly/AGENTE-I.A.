@@ -196,3 +196,21 @@ regras, mas a duplicação de runtime TS × Python permanece aberta como decisã
 auditoria (`ae2a3ae`). As seções 1-10 refletem deliberadamente o baseline `a6e1440` — valem como
 retrato histórico e como prova de convergência independente: 4 dos 6 itens do P0 desta auditoria
 foram implementados em paralelo pelo Codex sem coordenação prévia.*
+
+## 12. Execução — o que já foi entregue a partir deste roadmap
+
+| Branch | Entrega | Achado que fecha |
+|---|---|---|
+| `p0/residual-hardening` | Captura de **usage real** (tokens da API, nunca estimados) nos 3 providers LLM + **detecção de truncamento** (`stop_reason=max_tokens`, `finish_reason=length`, `finishReason=MAX_TOKENS`) — output parcial nunca é entregue como completo. Tokens na Observability. | PA-6 / R2 ✅ · PA-3 (metade da medição) |
+| `p0/residual-hardening` | **ESLint** no gate de qualidade (`npm run lint`), registrado em `AGENTS.md`. Única violação da base corrigida de verdade (erro relançado sem `cause`), não suprimida. | AU-10 ✅ |
+| `p1/risk-retry-review` | **Retry com backoff exponencial + jitter**, respeitando `Retry-After`. Política explícita por chamada: `safe` (429/5xx/rede) vs. `rate-limit-only` — esta aplicada ao `task.create` do Manus, que **não é idempotente** (um 5xx pode ter criado a task; repetir criaria uma segunda execução real). 4xx que não seja 429 nunca é repetido. | AU-8 ✅ |
+| `p1/risk-retry-review` | **Ciclo revisar → corrigir → revisar** com limite de tentativas. Correção passa pelos mesmos gates de custo e segurança da execução original (cada correção é paga). Só corrige em `REJECTED`; `NEEDS_HUMAN` vai direto para humano; artefato reprovado nunca vira aprovado; esgotar tentativas mantém `REJECTED`. | PA-4 ✅ |
+
+Estado do gate de qualidade ao fim desta execução: **lint ✅ · typecheck ✅ · 75/75 testes ✅ ·
+build ✅** (eram 27 testes no baseline da auditoria).
+
+**P1 remanescente:** validar a API/persistência do Codex em uso real (ponta a ponta com Supabase
+e aprovação humana completa); Risk Engine graduado LOW/MEDIUM/HIGH/CRITICAL (hoje o `EffectLevel`
+do Codex — READ/WRITE/EXTERNAL_ACTION/UNKNOWN, fail-closed — já cobre o essencial de segurança,
+falta a graduação de risco de negócio); confirmar `task.listMessages` do Manus com uma chamada
+real; reconciliar custo estimado × custo real agora que o `usage` é medido.

@@ -4,7 +4,7 @@ import { AnthropicProvider } from "../src/providers/anthropic.js";
 import { GeminiProvider } from "../src/providers/gemini.js";
 import { ManusProvider, ManusTaskWaitingError } from "../src/providers/manus.js";
 import { OpenAIProvider } from "../src/providers/openai.js";
-import { ProviderHttpError, sanitizeUrlForLogs } from "../src/providers/httpClient.js";
+import { ProviderHttpError, fetchJson, sanitizeUrlForLogs } from "../src/providers/httpClient.js";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -277,5 +277,140 @@ describe("ManusProvider", () => {
 
     const health = await provider.healthCheck();
     expect(health.healthy).toBe(true);
+  });
+});
+
+describe("httpClient — retry/backoff (AU-8 da AGENT-AUDIT.md)", () => {
+  const fetchMock = vi.fn();
+  const noSleep = () => Promise.resolve();
+  beforeEach(() => vi.stubGlobal("fetch", fetchMock));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    fetchMock.mockReset();
+  });
+
+  it("repete em 429 e devolve o sucesso da tentativa seguinte", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ error: "rate limited" }, 429))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+    const result = await fetchJson<{ ok: boolean }>("https://api.exemplo/x", { sleepFn: noSleep });
+
+    expect(result).toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("repete em 5xx na política safe (default)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ error: "unavailable" }, 503))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+    await fetchJson("https://api.exemplo/x", { sleepFn: noSleep });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("NUNCA repete 4xx que não seja 429 — erro do cliente, retry não corrige", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ error: "invalid key" }, 401));
+
+    await expect(fetchJson("https://api.exemplo/x", { sleepFn: noSleep })).rejects.toBeInstanceOf(ProviderHttpError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rate-limit-only: repete 429 mas NÃO repete 5xx (requisição não idempotente, ex. task.create do Manus)", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ error: "boom" }, 500));
+    await expect(
+      fetchJson("https://api.exemplo/x", { retryPolicy: "rate-limit-only", sleepFn: noSleep }),
+    ).rejects.toBeInstanceOf(ProviderHttpError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ error: "rate limited" }, 429))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }));
+    await fetchJson("https://api.exemplo/x", { retryPolicy: "rate-limit-only", sleepFn: noSleep });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("desiste após maxAttempts e propaga o último erro", async () => {
+    // mockImplementation (não mockResolvedValue): cada tentativa precisa de um
+    // Response novo, porque o body de um Response só pode ser lido uma vez.
+    fetchMock.mockImplementation(async () => jsonResponse({ error: "unavailable" }, 503));
+
+    await expect(fetchJson("https://api.exemplo/x", { maxAttempts: 3, sleepFn: noSleep })).rejects.toThrow(/HTTP 503/);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("respeita o header Retry-After quando presente", async () => {
+    const delays: number[] = [];
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "rate limited" }), {
+          status: 429,
+          headers: { "content-type": "application/json", "retry-after": "2" },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+    await fetchJson("https://api.exemplo/x", {
+      sleepFn: async (ms) => {
+        delays.push(ms);
+      },
+    });
+
+    expect(delays).toEqual([2000]);
+  });
+});
+
+describe("usage e truncamento nos demais providers", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => vi.stubGlobal("fetch", fetchMock));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    fetchMock.mockReset();
+  });
+
+  it("Anthropic: captura usage real (tokens) — ausente vira undefined, nunca zero", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        content: [{ type: "text", text: "ok" }],
+        model: "claude-sonnet-5",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 120, output_tokens: 45 },
+      }),
+    );
+    const provider = new AnthropicProvider({ apiKey: "ant-test" });
+    const result = await provider.analyze({ taskId: "t1", prompt: "oi" });
+    expect(result.usage).toEqual({ inputTokens: 120, outputTokens: 45 });
+  });
+
+  it("OpenAI (Responses API): usage é capturado no formato input/output_tokens", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        output: [{ type: "message", content: [{ type: "output_text", text: "ok" }] }],
+        model: "gpt-5.6-terra",
+        status: "completed",
+        usage: { input_tokens: 10, output_tokens: 5 },
+      }),
+    );
+    const provider = new OpenAIProvider({ apiKey: "sk-test" });
+    const result = await provider.analyze({ taskId: "t2", prompt: "oi" });
+    expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5 });
+  });
+
+  it("Gemini: finishReason=MAX_TOKENS vira erro; usageMetadata é capturado no caso normal", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: "cortad" }] }, finishReason: "MAX_TOKENS" }] }),
+    );
+    const provider = new GeminiProvider({ apiKey: "gem-test" });
+    await expect(provider.analyze({ taskId: "t1", prompt: "oi" })).rejects.toThrow(/MAX_TOKENS/);
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        candidates: [{ content: { parts: [{ text: "ok" }] }, finishReason: "STOP" }],
+        usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 3 },
+      }),
+    );
+    const result = await provider.analyze({ taskId: "t2", prompt: "oi" });
+    expect(result.usage).toEqual({ inputTokens: 8, outputTokens: 3 });
   });
 });

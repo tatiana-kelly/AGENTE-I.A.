@@ -65,6 +65,7 @@ Este repositório não duplica a governança do Control Plane. Decisões estrutu
 ```bash
 npm test
 npm run typecheck
+npm run lint
 npm run build
 ```
 

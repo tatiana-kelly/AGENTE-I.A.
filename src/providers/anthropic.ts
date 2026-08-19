@@ -22,6 +22,7 @@ interface MessagesResponse {
   content: Array<{ type: string; text?: string }>;
   model: string;
   stop_reason?: string | null;
+  usage?: { input_tokens: number; output_tokens: number };
 }
 
 interface ModelsListResponse {
@@ -97,7 +98,16 @@ export class AnthropicProvider implements AIProvider {
       .map((block) => block.text)
       .join("\n");
 
-    return { output, model: response.model ?? model, sources: [], evidence: [], raw: response };
+    return {
+      output,
+      model: response.model ?? model,
+      sources: [],
+      evidence: [],
+      usage: response.usage
+        ? { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
+        : undefined,
+      raw: response,
+    };
   }
 
   async healthCheck(): Promise<HealthStatus> {

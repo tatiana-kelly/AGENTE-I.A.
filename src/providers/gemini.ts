@@ -14,7 +14,8 @@ const DEFAULT_MODEL = "gemini-2.5-flash";
 const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
 interface GenerateContentResponse {
-  candidates: Array<{ content: { parts: Array<{ text?: string }> } }>;
+  candidates: Array<{ content: { parts: Array<{ text?: string }> }; finishReason?: string }>;
+  usageMetadata?: { promptTokenCount: number; candidatesTokenCount: number };
 }
 
 interface ModelsListResponse {
@@ -63,11 +64,32 @@ export class GeminiProvider implements AIProvider {
       },
     );
 
-    const output = (response.candidates[0]?.content.parts ?? [])
+    // Mesma classe de bug do fix a6e1440: MAX_TOKENS = resposta cortada —
+    // erro claro em vez de output truncado silencioso.
+    const candidate = response.candidates[0];
+    if (candidate?.finishReason === "MAX_TOKENS") {
+      throw new Error(
+        "Resposta do Gemini truncada pelo limite de tokens (finishReason=MAX_TOKENS). " +
+          "O output parcial não é entregue — reduza o escopo da tarefa ou aumente o limite.",
+      );
+    }
+
+    const output = (candidate?.content.parts ?? [])
       .map((part) => part.text ?? "")
       .join("");
 
-    return { output, sources: [], evidence: [], raw: response };
+    return {
+      output,
+      sources: [],
+      evidence: [],
+      usage: response.usageMetadata
+        ? {
+            inputTokens: response.usageMetadata.promptTokenCount,
+            outputTokens: response.usageMetadata.candidatesTokenCount,
+          }
+        : undefined,
+      raw: response,
+    };
   }
 
   async healthCheck(): Promise<HealthStatus> {

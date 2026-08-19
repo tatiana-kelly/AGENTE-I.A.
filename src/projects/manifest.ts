@@ -60,7 +60,9 @@ export function parseProjectManifest(contents: string): ProjectManifest {
   try {
     parsed = parse(contents);
   } catch (error) {
-    throw new Error(`AI-PROJECT.yaml inválido: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`AI-PROJECT.yaml inválido: ${error instanceof Error ? error.message : String(error)}`, {
+      cause: error,
+    });
   }
   return projectManifestSchema.parse(parsed);
 }

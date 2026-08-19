@@ -21,6 +21,8 @@ interface ResponsesApiResponse {
   model: string;
   status?: string;
   incomplete_details?: { reason?: string } | null;
+  /** Formato da Responses API (difere do chat/completions: input/output, não prompt/completion). */
+  usage?: { input_tokens: number; output_tokens: number };
 }
 
 interface ModelsListResponse {
@@ -99,6 +101,9 @@ export class OpenAIProvider implements AIProvider {
       model: response.model ?? model,
       sources: [],
       evidence: [],
+      usage: response.usage
+        ? { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
+        : undefined,
       raw: response,
     };
   }

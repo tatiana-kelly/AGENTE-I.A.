@@ -15,6 +15,12 @@ export interface TaskInput {
   modelProfile?: ModelProfile;
 }
 
+/** Tokens medidos, reportados pela própria API do provider — nunca estimados aqui. */
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface TaskResult {
   output: string;
   model?: string;
@@ -22,6 +28,8 @@ export interface TaskResult {
   evidence: string[];
   /** 0..1. Only set when the provider itself reports a confidence signal. */
   confidence?: number;
+  /** Só presente quando a resposta da API traz a métrica de uso — ausente ≠ zero. */
+  usage?: TokenUsage;
   raw?: unknown;
 }
 

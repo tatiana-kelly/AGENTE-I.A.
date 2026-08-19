@@ -11,7 +11,7 @@ import { routeTask } from "./routingEngine.js";
 import { planTask } from "./taskPlanner.js";
 import { evaluateExecution, loadExecutionModeFromEnv, type SecurityContext } from "./securityLayer.js";
 import { ProviderManager } from "./providerManager.js";
-import { validateResult } from "./validationEngine.js";
+import { runReviewCycle } from "./validationEngine.js";
 import { buildEvidenceRecord, InMemoryEvidenceSink, type EvidenceSink } from "./evidenceManager.js";
 import { CostController, loadCostControlConfigFromEnv } from "./costController.js";
 import { Observability } from "./observability.js";
@@ -36,8 +36,13 @@ export interface OrchestrateOptions {
   approvedMaxCostUsd?: number;
   observability?: Observability;
   costController?: CostController;
+  /** Tentativas de correção após reprovação na revisão. Default 1; zero desliga. */
+  maxCorrectionAttempts?: number;
   resultMemory?: ResultMemoryConfig;
 }
+
+/** Conservador de propósito: uma retentativa. Cada correção custa uma chamada nova ao provider. */
+const DEFAULT_MAX_CORRECTION_ATTEMPTS = 1;
 
 /**
  * FASE 1-9 entrypoint: ENTENDER → CLASSIFICAR → ESCOLHER → (se o gate de
@@ -346,7 +351,14 @@ export async function orchestrate(
 
       const durationMs = performance.now() - start;
       results.push({ provider: candidate, fallbackFor, purpose: step.purpose, status: "success", output: result.output });
-      observability.log({ task_id: runId, provider: candidate, status: "success", duration_ms: Math.round(durationMs) });
+      observability.log({
+        task_id: runId,
+        provider: candidate,
+        status: "success",
+        duration_ms: Math.round(durationMs),
+        input_tokens: result.usage?.inputTokens ?? "unknown",
+        output_tokens: result.usage?.outputTokens ?? "unknown",
+      });
       await repository?.updateRun(runId, {
         status: "success",
         output: result.output,
@@ -386,7 +398,8 @@ export async function orchestrate(
   if (lastSuccessful && planCompleted) {
     const reviewRunId = randomUUID();
     let reviewStarted = false;
-    const outcome = await validateResult(
+    const artifactProvider = lastSuccessful.provider;
+    const outcome = await runReviewCycle(
       providerManager,
       routing,
       {
@@ -399,7 +412,71 @@ export async function orchestrate(
       },
       lastSuccessful.result,
       {
-        artifactProvider: lastSuccessful.provider,
+        artifactProvider,
+        maxCorrectionAttempts: options.maxCorrectionAttempts ?? DEFAULT_MAX_CORRECTION_ATTEMPTS,
+        // A correção é uma chamada nova ao provider construtor: passa pelos
+        // mesmos gates de segurança e orçamento da execução original. Se
+        // qualquer um barrar, devolve undefined e o ciclo encerra sem promover
+        // o artefato rejeitado.
+        requestCorrection: async (feedback, attempt) => {
+          const capabilities = providerManager.capabilities(artifactProvider);
+          const gate = evaluateExecution(security, classification.effectLevel, capabilities.mayProduceExternalEffects);
+          if (!gate.allowed) {
+            base.requiresApproval ||= gate.requiresApproval;
+            return undefined;
+          }
+
+          const estimatedTaskCost =
+            capabilities.estimatedMaxCostUsd === undefined
+              ? undefined
+              : reservedCostUsd + capabilities.estimatedMaxCostUsd;
+          const cost = costController.evaluate(estimatedTaskCost, options.approvedMaxCostUsd);
+          if (!cost.withinBudget || cost.requiresConfirmation) {
+            base.requiresApproval = true;
+            observability.log({ task_id: reviewRunId, provider: artifactProvider, status: "skipped", error: cost.reason });
+            return undefined;
+          }
+          reservedCostUsd = estimatedTaskCost as number;
+
+          const correctionRunId = randomUUID();
+          const start = performance.now();
+          try {
+            const corrected = await providerManager.call(artifactProvider, {
+              taskId: correctionRunId,
+              prompt: feedback,
+              project: request.project,
+              context: { projectFiles: context.loaded, previousResults: successfulOutputs(results) },
+              skill: classification.skills[0],
+            });
+            observability.log({
+              task_id: correctionRunId,
+              provider: artifactProvider,
+              status: "success",
+              duration_ms: Math.round(performance.now() - start),
+              input_tokens: corrected.usage?.inputTokens ?? "unknown",
+              output_tokens: corrected.usage?.outputTokens ?? "unknown",
+            });
+            const record = buildEvidenceRecord({
+              taskId: correctionRunId,
+              runId: correctionRunId,
+              project: request.project,
+              provider: artifactProvider,
+              skill: classification.skills[0],
+              routingReason: `Correção ${attempt} após reprovação na revisão independente.`,
+              result: corrected,
+              status: "success",
+              confidence: routing.confidence,
+              timestamp: new Date().toISOString(),
+            });
+            await evidenceSink.record(record);
+            evidence.push(record);
+            return corrected;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            observability.log({ task_id: correctionRunId, provider: artifactProvider, status: "error", error: message });
+            return undefined;
+          }
+        },
         onReviewerCallStart: async (reviewer) => {
           reviewStarted = true;
           await repository?.createRun({
@@ -441,6 +518,7 @@ export async function orchestrate(
       reviewer: outcome.reviewer,
       summary: outcome.summary,
       reviewOutput: outcome.reviewResult?.output,
+      corrections: outcome.corrections.length > 0 ? outcome.corrections : undefined,
     };
     base.requiresApproval ||= outcome.status === "NEEDS_HUMAN" || outcome.status === "REJECTED";
     if (outcome.reviewer) {
@@ -612,7 +690,7 @@ export { routeTask } from "./routingEngine.js";
 export { planTask } from "./taskPlanner.js";
 export { resolveContext } from "./contextResolver.js";
 export { ProviderManager, ProviderNotRegisteredError } from "./providerManager.js";
-export { validateResult } from "./validationEngine.js";
+export { runReviewCycle, validateResult } from "./validationEngine.js";
 export { buildEvidenceRecord, InMemoryEvidenceSink } from "./evidenceManager.js";
 export { CostController, loadCostControlConfigFromEnv } from "./costController.js";
 export { evaluateExecution, loadExecutionModeFromEnv } from "./securityLayer.js";
