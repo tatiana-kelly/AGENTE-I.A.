@@ -1,0 +1,19 @@
+{
+  "name": "sal-ai-orchestrator",
+  "displayName": "SAL AI Orchestrator",
+  "version": "1.0.0",
+  "description": "Auditores especializados e conector governado do AI Orchestrator da SAL Express.",
+  "author": { "name": "SAL Express" },
+  "repository": "https://github.com/tatiana-kelly/AGENTE-I.A.",
+  "keywords": ["audit", "orchestrator", "sal-express", "multi-agent"],
+  "defaultEnabled": false,
+  "userConfig": {
+    "mcp_url": {
+      "type": "string",
+      "title": "URL do SAL AI Orchestrator",
+      "description": "Endpoint HTTPS terminado em /mcp publicado na Vercel.",
+      "required": true,
+      "default": "https://agente-i-a.vercel.app/mcp"
+    }
+  }
+}

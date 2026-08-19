@@ -160,6 +160,26 @@ export class SupabaseOrchestrationRepository implements OrchestrationRepository 
     this.fetchImpl = config.fetchImpl ?? fetch;
   }
 
+  async createOAuthGrant(grantId: string, expiresAt: string): Promise<void> {
+    await this.request("ai_oauth_grants", {
+      method: "POST",
+      body: JSON.stringify({ grant_id: grantId, expires_at: expiresAt }),
+    });
+  }
+
+  async consumeOAuthGrant(grantId: string, consumedAt: string): Promise<boolean> {
+    const response = await this.request(
+      `ai_oauth_grants?grant_id=eq.${encodeURIComponent(grantId)}&consumed_at=is.null&expires_at=gt.${encodeURIComponent(consumedAt)}&select=grant_id`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ consumed_at: consumedAt }),
+      },
+    );
+    const rows = z.array(z.object({ grant_id: z.string() })).parse(await response.json());
+    return rows.length === 1;
+  }
+
   async createTask(task: OrchestrationTaskRecord): Promise<void> {
     await this.request("ai_tasks", { method: "POST", body: JSON.stringify(toTaskRow(task)) });
   }

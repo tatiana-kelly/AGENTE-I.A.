@@ -117,7 +117,47 @@ npm run build
 npm run mcp:start
 ```
 
-Ferramentas expostas: `projects_list`, `projects_get_context` e `tasks_get`. Todas filtram por `ai_project_permissions`; projeto não autorizado é omitido sem confirmar sua existência. O processo MCP possui a chave de backend, mas ela não é devolvida ao agente. Para Cowork remoto/serviços compartilhados, não exponha stdio nem uma chave estática: aguarde o transporte HTTP com OAuth.
+Ferramentas expostas: `projects_list`, `projects_get_context` e `tasks_get`. Todas filtram por `ai_project_permissions`; projeto não autorizado é omitido sem confirmar sua existência. O processo MCP possui a chave de backend, mas ela não é devolvida ao agente. Para Cowork e serviços compartilhados, use somente o transporte HTTP com OAuth descrito abaixo.
+
+## MCP remoto para Claude, Cowork e Claude Code
+
+O endpoint `https://<dominio>/mcp` usa Streamable HTTP stateless e OAuth 2.0 com cliente confidencial, PKCE S256, access token de uma hora, refresh token e authorization code de uso único. A chave `service_role` permanece somente no backend. O conector expõe:
+
+- `projects_list` e `projects_get_context` para contexto autorizado;
+- `tasks_get` para rastreabilidade;
+- `tasks_run_audit` para executar o Orchestrator preservando gates de segurança e custo.
+
+O MCP remoto não expõe aprovação. Tarefas em `awaiting_approval` continuam somente pelo canal humano autenticado já existente (`POST /tasks/:id/continue`, normalmente acionado pelo n8n).
+
+Antes do deploy, aplique `supabase/migrations/202608190001_create_oauth_grants.sql` e configure segredos independentes:
+
+```text
+MCP_OAUTH_ISSUER=https://SEU-DOMINIO-VERCEL
+MCP_OAUTH_CLIENT_ID=sal-claude
+MCP_OAUTH_CLIENT_SECRET=<aleatorio-32+-caracteres>
+MCP_CONNECTOR_SECRET=<aleatorio-32+-caracteres>
+MCP_TOKEN_SIGNING_SECRET=<aleatorio-32+-caracteres>
+MCP_PRINCIPAL_TYPE=agent
+MCP_PRINCIPAL_ID=claude
+```
+
+Cadastre no Claude o URL `<MCP_OAUTH_ISSUER>/mcp`, o client ID e o client secret. A tela de autorização solicita `MCP_CONNECTOR_SECRET`, nunca uma chave Supabase. Os callbacks aceitos são exclusivamente `https://claude.ai/api/mcp/auth_callback` e loopback `localhost`/`127.0.0.1` para Claude Code.
+
+Conceda capacidades separadamente por projeto:
+
+```bash
+npm run project:grant -- meu-projeto --type agent --principal claude --capability read_context
+npm run project:grant -- meu-projeto --type agent --principal claude --capability audit
+```
+
+O marketplace privado está em `.claude-plugin/marketplace.json`. Após publicar no branch padrão:
+
+```text
+/plugin marketplace add tatiana-kelly/AGENTE-I.A.
+/plugin install sal-ai-orchestrator@sal-ai-tools
+```
+
+O plugin inicia desabilitado por segurança. Depois de revisar seus componentes, habilite-o. As descrições curtas fazem seleção automática sem carregar os prompts completos dos agentes em toda sessão.
 
 ## Modos de execução (FASE 7)
 

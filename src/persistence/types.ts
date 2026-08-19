@@ -111,6 +111,9 @@ export interface ProjectPermissionRecord {
 
 /** Persistence boundary owned exclusively by the AI Orchestrator. */
 export interface OrchestrationRepository {
+  createOAuthGrant(grantId: string, expiresAt: string): Promise<void>;
+  /** Atomically consumes a short-lived OAuth authorization code; false prevents replay. */
+  consumeOAuthGrant(grantId: string, consumedAt: string): Promise<boolean>;
   createTask(task: OrchestrationTaskRecord): Promise<void>;
   updateTask(taskId: string, update: OrchestrationTaskUpdate): Promise<void>;
   /** Atomically moves an awaiting task to running; false prevents duplicate approval replay. */
