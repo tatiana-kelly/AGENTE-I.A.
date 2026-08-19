@@ -6,11 +6,20 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "start": "node dist/api/server.js",
+    "project:init": "npm run build && node dist/cli/project.js init",
+    "project:validate": "npm run build && node dist/cli/project.js validate",
+    "project:sync": "npm run build && node dist/cli/project.js sync",
+    "project:grant": "npm run build && node dist/cli/project.js grant",
+    "mcp:start": "node dist/mcp/stdio.js",
     "typecheck": "tsc --noEmit",
+    "typecheck:vercel": "tsc -p tsconfig.vercel.json",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "yaml": "^2.9.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

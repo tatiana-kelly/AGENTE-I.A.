@@ -10,7 +10,7 @@ export { ProviderHttpError, describeProviderError } from "./httpClient.js";
 export { OpenAIProvider } from "./openai.js";
 export { AnthropicProvider } from "./anthropic.js";
 export { GeminiProvider } from "./gemini.js";
-export { ManusProvider } from "./manus.js";
+export { ManusProvider, ManusTaskWaitingError } from "./manus.js";
 
 export interface BuildProvidersResult {
   manager: ProviderManager;
@@ -30,21 +30,39 @@ export function buildProviderManagerFromEnv(env: NodeJS.ProcessEnv = process.env
   const skipped: ProviderName[] = [];
 
   if (env.OPENAI_API_KEY) {
-    manager.register(new OpenAIProvider({ apiKey: env.OPENAI_API_KEY, model: env.OPENAI_MODEL }));
+    manager.register(
+      new OpenAIProvider({
+        apiKey: env.OPENAI_API_KEY,
+        model: env.OPENAI_MODEL,
+        estimatedMaxCostUsd: numberOrUndefined(env.OPENAI_MAX_COST_PER_CALL_USD),
+      }),
+    );
     registered.push("openai");
   } else {
     skipped.push("openai");
   }
 
   if (env.ANTHROPIC_API_KEY) {
-    manager.register(new AnthropicProvider({ apiKey: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL }));
+    manager.register(
+      new AnthropicProvider({
+        apiKey: env.ANTHROPIC_API_KEY,
+        model: env.ANTHROPIC_MODEL,
+        estimatedMaxCostUsd: numberOrUndefined(env.ANTHROPIC_MAX_COST_PER_CALL_USD),
+      }),
+    );
     registered.push("anthropic");
   } else {
     skipped.push("anthropic");
   }
 
   if (env.GEMINI_API_KEY) {
-    manager.register(new GeminiProvider({ apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL }));
+    manager.register(
+      new GeminiProvider({
+        apiKey: env.GEMINI_API_KEY,
+        model: env.GEMINI_MODEL,
+        estimatedMaxCostUsd: numberOrUndefined(env.GEMINI_MAX_COST_PER_CALL_USD),
+      }),
+    );
     registered.push("gemini");
   } else {
     skipped.push("gemini");
@@ -57,6 +75,7 @@ export function buildProviderManagerFromEnv(env: NodeJS.ProcessEnv = process.env
         agentProfile: env.MANUS_AGENT_PROFILE,
         pollIntervalMs: numberOrUndefined(env.MANUS_POLL_INTERVAL_MS),
         pollTimeoutMs: numberOrUndefined(env.MANUS_POLL_TIMEOUT_MS),
+        estimatedMaxCostUsd: numberOrUndefined(env.MANUS_MAX_COST_PER_CALL_USD),
       }),
     );
     registered.push("manus");

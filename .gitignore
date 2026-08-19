@@ -6,3 +6,6 @@ dist/
 *.log
 .DS_Store
 coverage/
+supabase/.temp/
+
+.vercel/

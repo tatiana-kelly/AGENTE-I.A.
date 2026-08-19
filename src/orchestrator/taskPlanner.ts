@@ -11,6 +11,18 @@ import type { ClassificationResult, RoutingDecision, TaskPlan } from "./types.js
 export function planTask(classification: ClassificationResult, routing: RoutingDecision): TaskPlan {
   const { requiresGoogleWorkspace, requiresInvestigation, requiresDecision, requiresImplementation } = classification;
 
+  if (requiresInvestigation && requiresImplementation && requiresDecision) {
+    return {
+      mode: "MULTI_AGENT",
+      steps: [
+        { provider: "manus", purpose: "investigar/pesquisar" },
+        { provider: "openai", purpose: "decidir a melhor abordagem" },
+        { provider: "anthropic", purpose: "construir a solução aprovada" },
+        { provider: "openai", purpose: "validar o resultado construído" },
+      ],
+    };
+  }
+
   if (requiresGoogleWorkspace && requiresInvestigation) {
     return {
       mode: "MULTI_AGENT",

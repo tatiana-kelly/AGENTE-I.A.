@@ -1,0 +1,51 @@
+version: 1
+project_id: agente-ia
+name: SAL AI OS - AI Orchestrator
+repository: tatiana-kelly/AGENTE-I.A
+default_branch: main
+
+context:
+  root: .ai
+  files:
+    - PROJECT-CONTEXT.md
+    - ARCHITECTURE.md
+    - BUSINESS-RULES.md
+    - DATA-DICTIONARY.md
+    - AI-INSTRUCTIONS.md
+
+access:
+  default: read_only
+  allowed_paths:
+    - src/**
+    - tests/**
+    - scripts/**
+    - supabase/migrations/**
+    - projects/**
+    - .ai/**
+    - .agents/**
+    - "*.md"
+    - "*.json"
+    - "*.yaml"
+    - "*.ts"
+    - .env.example
+  denied_paths:
+    - .env
+    - "**/.env"
+    - "**/credentials/**"
+    - "**/service_account.json"
+    - "**/*.pem"
+    - "**/*.key"
+
+commands:
+  test: npm test
+  typecheck: npm run typecheck
+  build: npm run build
+
+changes:
+  require_branch: true
+  require_tests: true
+  require_human_approval_for:
+    - push
+    - pull_request
+    - deploy
+    - database_migration
