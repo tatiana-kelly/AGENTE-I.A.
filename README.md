@@ -143,6 +143,21 @@ MCP_PRINCIPAL_ID=claude
 
 Cadastre no Claude o URL `<MCP_OAUTH_ISSUER>/mcp`, o client ID e o client secret. A tela de autorização solicita `MCP_CONNECTOR_SECRET`, nunca uma chave Supabase. Os callbacks aceitos são exclusivamente `https://claude.ai/api/mcp/auth_callback` e loopback `localhost`/`127.0.0.1` para Claude Code.
 
+### Registro dinâmico de cliente (opcional, desligado por padrão)
+
+Alguns clientes MCP só aceitam a URL do conector e esperam obter `client_id`/`client_secret` sozinhos via RFC 7591 — sem campo para informá-los à mão. Nesse caso o fluxo trava em `invalid_client` no `/oauth/authorize`, porque o cliente não tem identidade válida.
+
+Para esse cenário, `MCP_OAUTH_DYNAMIC_REGISTRATION=true` habilita `POST /oauth/register`. O `client_id` emitido é auto-verificável (semente aleatória + HMAC) e o `client_secret` é derivado dele, então o servidor reconhece o que emitiu **sem guardar estado** — nenhuma migration nova é necessária.
+
+O que **não** muda ao habilitar:
+
+- `redirect_uris` continuam limitados à mesma allowlist (`claude.ai` + loopback) — registrar não abre destino novo;
+- a tela de autorização continua exigindo `MCP_CONNECTOR_SECRET`. **Registrar um cliente não concede acesso algum**: sem esse segredo não sai authorization code nem token.
+
+Limitação registrada: não há revogação individual de cliente dinâmico. Para invalidar todos de uma vez, troque `MCP_TOKEN_SIGNING_SECRET` — isso também invalida tokens em circulação, e é a saída de emergência deliberada. Desligar a flag também passa a recusar todos os clientes dinâmicos já emitidos.
+
+Mantenha `false` sempre que o cliente permitir informar client ID e secret manualmente: é o modo mais fechado.
+
 Conceda capacidades separadamente por projeto:
 
 ```bash

@@ -5,7 +5,9 @@ import {
   authorizationCodeGrantId,
   exchangeAuthorizationCode,
   issueAuthorizationCode,
+  oauthMetadata,
   refreshAccessToken,
+  registerDynamicClient,
   validateAuthorizationRequest,
   verifyAccessToken,
   type McpOAuthConfig,
@@ -18,6 +20,7 @@ const config: McpOAuthConfig = {
   connectorSecret: "a".repeat(32),
   signingSecret: "s".repeat(32),
   principalId: "claude",
+  dynamicRegistration: false,
 };
 
 afterEach(() => vi.useRealTimers());
@@ -112,3 +115,84 @@ function authorizationUrl(overrides: Record<string, string> = {}): URL {
 function challenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
 }
+
+
+describe("Registro dinâmico de cliente (RFC 7591)", () => {
+  const dcrConfig: McpOAuthConfig = { ...config, dynamicRegistration: true };
+  const claudeCallback = "https://claude.ai/api/mcp/auth_callback";
+
+  it("fica desabilitado por padrão e não é anunciado no metadata", () => {
+    expect(oauthMetadata(config)).not.toHaveProperty("registration_endpoint");
+    expect(() => registerDynamicClient({ redirect_uris: [claudeCallback] }, config)).toThrowError(OAuthError);
+  });
+
+  it("quando habilitado, anuncia o endpoint e emite client_id/client_secret", () => {
+    expect(oauthMetadata(dcrConfig).registration_endpoint).toBe(`${config.issuer}/oauth/register`);
+
+    const registration = registerDynamicClient({ redirect_uris: [claudeCallback], client_name: "Claude" }, dcrConfig);
+
+    expect(registration.client_id).toMatch(/^dyn_/);
+    expect(registration.client_secret.length).toBeGreaterThanOrEqual(32);
+    expect(registration.redirect_uris).toEqual([claudeCallback]);
+  });
+
+  it("recusa redirect_uri fora da allowlist — registrar não amplia destinos", () => {
+    expect(() => registerDynamicClient({ redirect_uris: ["https://evil.example/callback"] }, dcrConfig))
+      .toThrowError(OAuthError);
+    expect(() => registerDynamicClient({ redirect_uris: [] }, dcrConfig)).toThrowError(OAuthError);
+    expect(() => registerDynamicClient({}, dcrConfig)).toThrowError(OAuthError);
+  });
+
+  it("cliente dinâmico completa authorize → code → token como o estático", async () => {
+    const registration = registerDynamicClient({ redirect_uris: [claudeCallback] }, dcrConfig);
+    const verifier = "v".repeat(43);
+    const url = authorizationUrl({ client_id: registration.client_id, redirect_uri: claudeCallback });
+
+    const authorization = validateAuthorizationRequest(url, dcrConfig);
+    const code = issueAuthorizationCode(authorization, dcrConfig.connectorSecret, dcrConfig);
+    const tokens = await exchangeAuthorizationCode({
+      code,
+      clientId: registration.client_id,
+      clientSecret: registration.client_secret,
+      redirectUri: claudeCallback,
+      codeVerifier: verifier,
+    }, dcrConfig, async () => true);
+
+    expect(tokens.token_type).toBe("Bearer");
+    expect(verifyAccessToken(tokens.access_token, dcrConfig).principalId).toBe(config.principalId);
+  });
+
+  it("client_id forjado é recusado — só vale o que este servidor assinou", () => {
+    const forged = authorizationUrl({ client_id: "dyn_qualquercoisa.inventada", redirect_uri: claudeCallback });
+    expect(() => validateAuthorizationRequest(forged, dcrConfig)).toThrowError(OAuthError);
+  });
+
+  it("client_secret errado para um client_id legítimo é recusado", async () => {
+    const registration = registerDynamicClient({ redirect_uris: [claudeCallback] }, dcrConfig);
+    const url = authorizationUrl({ client_id: registration.client_id, redirect_uri: claudeCallback });
+    const code = issueAuthorizationCode(validateAuthorizationRequest(url, dcrConfig), dcrConfig.connectorSecret, dcrConfig);
+
+    await expect(exchangeAuthorizationCode({
+      code,
+      clientId: registration.client_id,
+      clientSecret: "secret-errado",
+      redirectUri: claudeCallback,
+      codeVerifier: "v".repeat(43),
+    }, dcrConfig, async () => true)).rejects.toThrowError(OAuthError);
+  });
+
+  it("registrar NÃO basta: sem o connector secret não sai código nenhum", () => {
+    const registration = registerDynamicClient({ redirect_uris: [claudeCallback] }, dcrConfig);
+    const url = authorizationUrl({ client_id: registration.client_id, redirect_uri: claudeCallback });
+    const authorization = validateAuthorizationRequest(url, dcrConfig);
+
+    expect(() => issueAuthorizationCode(authorization, "palpite-errado", dcrConfig)).toThrowError(OAuthError);
+  });
+
+  it("desligar a flag invalida clientes dinâmicos já emitidos", () => {
+    const registration = registerDynamicClient({ redirect_uris: [claudeCallback] }, dcrConfig);
+    const url = authorizationUrl({ client_id: registration.client_id, redirect_uri: claudeCallback });
+
+    expect(() => validateAuthorizationRequest(url, config)).toThrowError(OAuthError);
+  });
+});

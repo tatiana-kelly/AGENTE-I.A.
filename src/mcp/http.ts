@@ -15,6 +15,7 @@ import {
   oauthMetadata,
   protectedResourceMetadata,
   refreshAccessToken,
+  registerDynamicClient,
   validateAuthorizationRequest,
   verifyAccessToken,
 } from "./oauth.js";
@@ -38,6 +39,10 @@ export function createMcpHttpHandler(dependencies: McpHttpDependencies) {
       }
       if (request.method === "GET" && (url.pathname === "/.well-known/oauth-protected-resource" || url.pathname === "/.well-known/oauth-protected-resource/mcp")) {
         return writeJson(response, 200, protectedResourceMetadata(config));
+      }
+      if (request.method === "POST" && url.pathname === "/oauth/register") {
+        const registration = registerDynamicClient(await readJson(request), config);
+        return writeJson(response, 201, registration);
       }
       if (request.method === "GET" && url.pathname === "/oauth/authorize") {
         const authorization = validateAuthorizationRequest(url, config);
@@ -159,6 +164,20 @@ async function readForm(request: IncomingMessage): Promise<URLSearchParams> {
   if (!type.startsWith("application/x-www-form-urlencoded")) throw new OAuthError("invalid_request", "Formulário inválido.");
   const body = await readBody(request, MAX_AUTH_BODY_BYTES);
   return new URLSearchParams(body.toString("utf8"));
+}
+
+/** RFC 7591 §3.1: o registro é JSON, não form-urlencoded. Mesmo teto de bytes. */
+async function readJson(request: IncomingMessage): Promise<unknown> {
+  const type = request.headers["content-type"]?.toLowerCase() ?? "";
+  if (!type.startsWith("application/json")) {
+    throw new OAuthError("invalid_client_metadata", "Envie application/json.");
+  }
+  const body = await readBody(request, MAX_AUTH_BODY_BYTES);
+  try {
+    return JSON.parse(body.toString("utf8"));
+  } catch {
+    throw new OAuthError("invalid_client_metadata", "JSON inválido.");
+  }
 }
 
 async function toWebRequest(request: IncomingMessage, url: URL): Promise<Request> {
