@@ -154,4 +154,45 @@ paralelização de steps com dependências; timeout por step; docs/ completos (A
 
 ---
 
-*Auditoria concluída sem nenhuma alteração de código. Próximo passo: validação deste diagnóstico e do roadmap pela Tatiana; implementação começa pelo P0 somente após aprovação.*
+## 11. ADENDO PÓS-MERGE (2026-08-17, mesmo dia) — PR #1 `codex/harden-orchestrator-core`
+
+Enquanto esta auditoria era escrita contra o baseline `a6e1440`, chegaram ao remoto **29 commits
+via PR #1** (trabalho do Codex/OpenAI encomendado pela Tatiana, ~4.800 linhas). Merge integrado
+sem conflito; **61/61 testes passando** (eram 27), typecheck e build limpos. Re-verificação de
+cada achado desta auditoria contra o código novo (verificado no código, não na mensagem de
+commit):
+
+| Achado original | Status pós-merge | Evidência |
+|---|---|---|
+| PA-1 Contexto nunca injetado | ✅ **RESOLVIDO** | `buildStepPrompt(request.task, step.purpose, context.loaded, results)` — contexto do projeto E outputs dos steps anteriores agora entram no prompt; `TaskInput.context` populado |
+| PA-2 Fallback declarado e não usado | ✅ **RESOLVIDO** | `providerCandidates(step.provider, routing.primary, routing.fallback)` com `fallbackFor` rastreado em resultado, evidência e persistência |
+| PA-10 task_id `Date.now()` | ✅ **RESOLVIDO** | `randomUUID()` para task e cada run |
+| PA-3 Cost Engine decorativo | 🟡 **PARCIAL** | Agora existe gate **a priori** real: `capabilities.estimatedMaxCostUsd` por provider + reserva de orçamento acumulada (`reservedCostUsd`) + escalação para aprovação quando estoura. O que segue ausente: **captura do custo real** — nenhum provider extrai `usage` (tokens) da resposta (grep vazio em `anthropic.ts`/`openai.ts`), então `cost_usd` na Observability continua "unknown" e o gate opera só sobre estimativa declarada, nunca sobre medição |
+| PA-6 Truncamento sem detecção (TS Anthropic) | ❌ **ABERTO** | `stop_reason` segue não lido em `src/providers/anthropic.ts` |
+| PA-7 Manus `task.listMessages` | ✅ provável — `fix(manus): align parser with v2 events` + testes; confirmar com 1 chamada real segue recomendado |
+| AU-2 Persistência Supabase (FASE 11) | ✅ **ENTREGUE** | `supabase/migrations/` (3 migrations: persistence, continuation, project registry) + repository isolado + `persistence.test.ts` |
+| AU-3 API HTTP (FASE 13) | ✅ **ENTREGUE** | endpoints autenticados + `api.test.ts` (191 linhas) + deploy Vercel (`vercel.json`, rota serverless) |
+| AU-4 Human-in-the-loop | 🟡 avançou — continuação assistida auditável (`feat(security): add auditable assisted continuation`, migration `add_task_continuation`); fluxo completo APPROVE/REJECT via API a validar em uso real |
+| AU-10 ESLint | ❌ **ABERTO** | sem script `lint` no `package.json` |
+
+**Governança nova que passou a valer com o merge**: `CLAUDE.md` agora aponta para `AGENTS.md`
+(padrão compartilhado Claude/Codex/Cowork) com regras adicionais: trabalhar **em branch** para
+mudança de código; `AI-PROJECT.yaml` + `.ai/` como contrato de contexto autorizado;
+`access.denied_paths` explícitos; e — importante — **tornar o Codex construtor/fallback oficial
+exige aprovação estrutural explícita da Tatiana** (hoje o construtor oficial segue sendo o
+Claude Code).
+
+**P0 residual (o que sobrou do roadmap original, já aprovado pela Tatiana):**
+1. Capturar `usage` real das respostas (OpenAI/Anthropic/Gemini) → custo medido na Observability
+   e reconciliação estimativa × real no Cost Engine.
+2. Detecção de truncamento no provider TS Anthropic (`stop_reason`), portando o fix `a6e1440`.
+3. ESLint no gate de qualidade.
+
+Os riscos R1 e R4 estão encerrados; R2 e parte do R3 permanecem. R7 (dois orchestrators) ganhou
+um agravante positivo: a governança compartilhada (`AGENTS.md`) reduz o risco de divergência de
+regras, mas a duplicação de runtime TS × Python permanece aberta como decisão da Tatiana.
+
+*Adendo registrado em 2026-08-17, após merge de `origin/main` (`47467db`) sobre o commit da
+auditoria (`ae2a3ae`). As seções 1-10 refletem deliberadamente o baseline `a6e1440` — valem como
+retrato histórico e como prova de convergência independente: 4 dos 6 itens do P0 desta auditoria
+foram implementados em paralelo pelo Codex sem coordenação prévia.*
