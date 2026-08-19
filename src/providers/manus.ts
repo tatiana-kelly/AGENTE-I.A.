@@ -186,6 +186,10 @@ export class ManusProvider implements AIProvider {
     const response = await fetchJson<unknown>(`${this.baseUrl}/v2/task.create`, {
       method: "POST",
       timeoutMs: this.timeoutMs,
+      // NÃO idempotente: cria uma task que executa de verdade. Um 5xx pode
+      // ter criado a task do outro lado, então repetir criaria uma segunda
+      // execução — só 429 (recusado antes de processar) é seguro repetir.
+      retryPolicy: "rate-limit-only",
       headers: {
         "content-type": "application/json",
         "x-manus-api-key": this.apiKey,
