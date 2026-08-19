@@ -281,3 +281,108 @@ describe("orchestrate() — execução ponta a ponta", () => {
     expect(result.results[0]).toMatchObject({ provider: "anthropic", status: "skipped" });
   });
 });
+
+/** Provider que muda de resposta a cada chamada — simula construtor corrigindo após reprovação. */
+class SequenceFakeProvider extends FakeProvider {
+  private call = 0;
+  constructor(
+    name: AIProvider["name"],
+    private readonly outputs: string[],
+  ) {
+    super(name, outputs[0] ?? "");
+  }
+  override async analyze(input: TaskInput): Promise<TaskResult> {
+    this.inputs.push(input);
+    const output = this.outputs[Math.min(this.call, this.outputs.length - 1)] ?? "";
+    this.call += 1;
+    return { output, sources: [`fake://${this.name}`], evidence: [], confidence: 0.9 };
+  }
+}
+
+describe("ciclo de correção após reprovação na revisão (missão §8)", () => {
+  // Tarefa escolhida de propósito para que o artefato final seja do Manus e o
+  // reviewer seja o OpenAI — se o artefato fosse do próprio reviewer, o guard
+  // de autorrevisão (correto) bloquearia com NEEDS_HUMAN antes do ciclo.
+  const task = "investigue por que o custo do frete subiu";
+
+  it("REJECTED dispara correção, e o resultado corrigido é revalidado e aprovado", async () => {
+    const manager = new ProviderManager();
+    // manus investiga (artefato), openai revisa: reprova a 1ª, aprova a 2ª.
+    const builder = new SequenceFakeProvider("manus", ["versão ruim", "versão corrigida"]);
+    const reviewer = new SequenceFakeProvider("openai", [
+      JSON.stringify({ status: "REJECTED", summary: "faltou quantificar o impacto" }),
+      JSON.stringify({ status: "APPROVED", summary: "impacto agora está quantificado" }),
+    ]);
+    manager.register(builder);
+    manager.register(reviewer);
+
+    const result = await orchestrate(
+      { task },
+      { providerManager: manager, repository: null, evidenceSink: new InMemoryEvidenceSink(), projectsRoot: FIXTURES_ROOT },
+    );
+
+    expect(result.validation?.status).toBe("APPROVED");
+    expect(result.validation?.corrections).toHaveLength(1);
+    expect(result.validation?.corrections?.[0].rejectionSummary).toBe("faltou quantificar o impacto");
+    expect(result.validation?.corrections?.[0].correctedOutput).toBe("versão corrigida");
+    // O prompt de correção precisa carregar o motivo da reprovação para o construtor.
+    const correctionPrompt = builder.inputs.at(-1)?.prompt ?? "";
+    expect(correctionPrompt).toContain("faltou quantificar o impacto");
+    expect(correctionPrompt).toContain("versão ruim");
+  });
+
+  it("esgotar as tentativas mantém REJECTED e escala para aprovação humana — nunca promove o artefato reprovado", async () => {
+    const manager = new ProviderManager();
+    const builder = new SequenceFakeProvider("manus", ["ruim", "ainda ruim"]);
+    const reviewer = new FakeProvider("openai", JSON.stringify({ status: "REJECTED", summary: "continua sem evidência" }));
+    manager.register(builder);
+    manager.register(reviewer);
+
+    const result = await orchestrate(
+      { task },
+      { providerManager: manager, repository: null, evidenceSink: new InMemoryEvidenceSink(), projectsRoot: FIXTURES_ROOT },
+    );
+
+    expect(result.validation?.status).toBe("REJECTED");
+    expect(result.validation?.corrections).toHaveLength(1);
+    expect(result.requiresApproval).toBe(true);
+  });
+
+  it("maxCorrectionAttempts=0 preserva o comportamento anterior (nenhuma correção automática)", async () => {
+    const manager = new ProviderManager();
+    const builder = new SequenceFakeProvider("manus", ["ruim", "corrigida"]);
+    manager.register(builder);
+    manager.register(new FakeProvider("openai", JSON.stringify({ status: "REJECTED", summary: "reprovado" })));
+
+    const result = await orchestrate(
+      { task },
+      {
+        providerManager: manager,
+        repository: null,
+        evidenceSink: new InMemoryEvidenceSink(),
+        projectsRoot: FIXTURES_ROOT,
+        maxCorrectionAttempts: 0,
+      },
+    );
+
+    expect(result.validation?.status).toBe("REJECTED");
+    expect(result.validation?.corrections).toBeUndefined();
+  });
+
+  it("NEEDS_HUMAN nunca dispara correção automática — incerteza vai direto para humano", async () => {
+    const manager = new ProviderManager();
+    const builder = new SequenceFakeProvider("manus", ["v1", "v2"]);
+    manager.register(builder);
+    // Reviewer devolve formato inválido → validationEngine classifica NEEDS_HUMAN.
+    manager.register(new FakeProvider("openai", "não é json"));
+
+    const result = await orchestrate(
+      { task },
+      { providerManager: manager, repository: null, evidenceSink: new InMemoryEvidenceSink(), projectsRoot: FIXTURES_ROOT },
+    );
+
+    expect(result.validation?.status).toBe("NEEDS_HUMAN");
+    expect(result.validation?.corrections).toBeUndefined();
+    expect(result.requiresApproval).toBe(true);
+  });
+});

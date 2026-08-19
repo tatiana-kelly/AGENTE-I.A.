@@ -117,5 +117,12 @@ export interface OrchestrationResult {
     reviewer?: ProviderName;
     summary: string;
     reviewOutput?: string;
+    /** Ciclo revisar→corrigir→revisar. Vazio quando o resultado passou de primeira. */
+    corrections?: Array<{
+      attempt: number;
+      rejectionSummary: string;
+      correctedOutput?: string;
+      blockedReason?: string;
+    }>;
   };
 }
