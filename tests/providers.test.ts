@@ -4,7 +4,7 @@ import { AnthropicProvider } from "../src/providers/anthropic.js";
 import { GeminiProvider } from "../src/providers/gemini.js";
 import { ManusProvider, ManusTaskWaitingError } from "../src/providers/manus.js";
 import { OpenAIProvider } from "../src/providers/openai.js";
-import { ProviderHttpError, fetchJson } from "../src/providers/httpClient.js";
+import { ProviderHttpError, fetchJson, sanitizeUrlForLogs } from "../src/providers/httpClient.js";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -21,9 +21,13 @@ describe("OpenAIProvider", () => {
     fetchMock.mockReset();
   });
 
-  it("envia o prompt e extrai o texto da resposta", async () => {
+  it("usa Responses API com GPT-5.6 Terra no perfil balanceado e extrai output_text", async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ choices: [{ message: { content: "resposta do gpt" }, finish_reason: "stop" }], model: "gpt-4o-mini" }),
+      jsonResponse({
+        output: [{ type: "message", content: [{ type: "output_text", text: "resposta do gpt" }] }],
+        model: "gpt-5.6-sol",
+        status: "completed",
+      }),
     );
 
     const provider = new OpenAIProvider({ apiKey: "sk-test" });
@@ -31,9 +35,24 @@ describe("OpenAIProvider", () => {
 
     expect(result.output).toBe("resposta do gpt");
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("https://api.openai.com/v1/chat/completions");
+    expect(url).toBe("https://api.openai.com/v1/responses");
     expect(init.headers.authorization).toBe("Bearer sk-test");
-    expect(JSON.parse(init.body).messages[0].content).toBe("oi");
+    expect(JSON.parse(init.body)).toMatchObject({
+      model: "gpt-5.6-terra",
+      input: "oi",
+      reasoning: { effort: "medium" },
+    });
+  });
+
+  it("seleciona GPT-5.6 Sol para o perfil crítico", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ output: [], model: "gpt-5.6-sol", status: "completed" }),
+    );
+    const provider = new OpenAIProvider({ apiKey: "sk-test" });
+
+    await provider.analyze({ taskId: "t2", prompt: "decida", modelProfile: "critical" });
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).model).toBe("gpt-5.6-sol");
   });
 
   it("propaga erro HTTP como ProviderHttpError", async () => {
@@ -66,77 +85,35 @@ describe("AnthropicProvider", () => {
     expect(init.headers["anthropic-version"]).toBe("2023-06-01");
   });
 
-  it("lança erro claro quando a resposta é truncada por max_tokens — nunca entrega output parcial (porta do fix a6e1440)", async () => {
+  it("rejeita resposta truncada por max_tokens", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
-        content: [{ type: "text", text: "resposta cortada no mei" }],
+        content: [{ type: "text", text: "resultado incompleto" }],
         model: "claude-sonnet-5",
         stop_reason: "max_tokens",
       }),
     );
 
+    const provider = new AnthropicProvider({ apiKey: "ant-test", maxTokens: 32 });
+    await expect(provider.analyze({ taskId: "t1", prompt: "oi" })).rejects.toThrow(/truncada.*32/i);
+  });
+
+  it("seleciona Sonnet, Opus e Fable conforme o perfil", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ content: [], model: "claude-sonnet-5", stop_reason: "end_turn" }))
+      .mockResolvedValueOnce(jsonResponse({ content: [], model: "claude-opus-5", stop_reason: "end_turn" }))
+      .mockResolvedValueOnce(jsonResponse({ content: [], model: "claude-fable-5", stop_reason: "end_turn" }));
     const provider = new AnthropicProvider({ apiKey: "ant-test" });
-    await expect(provider.analyze({ taskId: "t1", prompt: "oi" })).rejects.toThrow(/truncada por max_tokens/);
-  });
 
-  it("captura usage real (tokens) reportado pela API — ausente vira undefined, nunca zero", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        content: [{ type: "text", text: "ok" }],
-        model: "claude-sonnet-5",
-        stop_reason: "end_turn",
-        usage: { input_tokens: 120, output_tokens: 45 },
-      }),
-    );
+    await provider.analyze({ taskId: "a1", prompt: "rotina", modelProfile: "balanced" });
+    await provider.analyze({ taskId: "a2", prompt: "complexo", modelProfile: "critical" });
+    await provider.analyze({ taskId: "a3", prompt: "adversarial", modelProfile: "adversarial" });
 
-    const provider = new AnthropicProvider({ apiKey: "ant-test" });
-    const result = await provider.analyze({ taskId: "t1", prompt: "oi" });
-
-    expect(result.usage).toEqual({ inputTokens: 120, outputTokens: 45 });
-  });
-});
-
-describe("truncamento e usage nos demais providers (mesma classe de bug do fix a6e1440)", () => {
-  const fetchMock = vi.fn();
-  beforeEach(() => vi.stubGlobal("fetch", fetchMock));
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    fetchMock.mockReset();
-  });
-
-  it("OpenAI: finish_reason=length vira erro; usage é capturado no caso normal", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ choices: [{ message: { content: "cortad" }, finish_reason: "length" }], model: "gpt-4o-mini" }),
-    );
-    const provider = new OpenAIProvider({ apiKey: "sk-test" });
-    await expect(provider.analyze({ taskId: "t1", prompt: "oi" })).rejects.toThrow(/finish_reason=length/);
-
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        choices: [{ message: { content: "ok" }, finish_reason: "stop" }],
-        model: "gpt-4o-mini",
-        usage: { prompt_tokens: 10, completion_tokens: 5 },
-      }),
-    );
-    const result = await provider.analyze({ taskId: "t2", prompt: "oi" });
-    expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5 });
-  });
-
-  it("Gemini: finishReason=MAX_TOKENS vira erro; usageMetadata é capturado no caso normal", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ candidates: [{ content: { parts: [{ text: "cortad" }] }, finishReason: "MAX_TOKENS" }] }),
-    );
-    const provider = new GeminiProvider({ apiKey: "gem-test" });
-    await expect(provider.analyze({ taskId: "t1", prompt: "oi" })).rejects.toThrow(/MAX_TOKENS/);
-
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        candidates: [{ content: { parts: [{ text: "ok" }] }, finishReason: "STOP" }],
-        usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 3 },
-      }),
-    );
-    const result = await provider.analyze({ taskId: "t2", prompt: "oi" });
-    expect(result.usage).toEqual({ inputTokens: 8, outputTokens: 3 });
+    expect(fetchMock.mock.calls.map((call) => JSON.parse(call[1].body).model)).toEqual([
+      "claude-sonnet-5",
+      "claude-opus-5",
+      "claude-fable-5",
+    ]);
   });
 });
 
@@ -159,6 +136,23 @@ describe("GeminiProvider", () => {
     expect(result.output).toBe("resposta gemini");
     const [url] = fetchMock.mock.calls[0];
     expect(url).toContain("gemini-2.5-flash:generateContent?key=gem-test");
+  });
+
+  it("não inclui a API key da query string em erros", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: { message: "quota" } }, 429));
+    const provider = new GeminiProvider({ apiKey: "gem-secret-value" });
+
+    await expect(provider.analyze({ taskId: "t1", prompt: "oi" })).rejects.toMatchObject({
+      message: expect.not.stringContaining("gem-secret-value"),
+    });
+  });
+});
+
+describe("sanitizeUrlForLogs", () => {
+  it("remove query e fragmento sem perder o endpoint", () => {
+    expect(sanitizeUrlForLogs("https://example.test/v1/models?key=secret#fragment")).toBe(
+      "https://example.test/v1/models",
+    );
   });
 });
 
@@ -267,6 +261,23 @@ describe("ManusProvider", () => {
     const provider = new ManusProvider({ apiKey: "manus-test", pollIntervalMs: 1 });
     await expect(provider.analyze({ taskId: "t1", prompt: "x" })).rejects.toThrow(/status "error"/);
   });
+
+  it("considera 401 do health check como credencial não saudável", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "unauthorized" }, 401));
+    const provider = new ManusProvider({ apiKey: "manus-invalid" });
+
+    const health = await provider.healthCheck();
+    expect(health.healthy).toBe(false);
+    expect(health.message).toBe("HTTP 401");
+  });
+
+  it("aceita 404 contratual do probe como endpoint saudável", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "task not found" }, 404));
+    const provider = new ManusProvider({ apiKey: "manus-test" });
+
+    const health = await provider.healthCheck();
+    expect(health.healthy).toBe(true);
+  });
 });
 
 describe("httpClient — retry/backoff (AU-8 da AGENT-AUDIT.md)", () => {
@@ -347,5 +358,59 @@ describe("httpClient — retry/backoff (AU-8 da AGENT-AUDIT.md)", () => {
     });
 
     expect(delays).toEqual([2000]);
+  });
+});
+
+describe("usage e truncamento nos demais providers", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => vi.stubGlobal("fetch", fetchMock));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    fetchMock.mockReset();
+  });
+
+  it("Anthropic: captura usage real (tokens) — ausente vira undefined, nunca zero", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        content: [{ type: "text", text: "ok" }],
+        model: "claude-sonnet-5",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 120, output_tokens: 45 },
+      }),
+    );
+    const provider = new AnthropicProvider({ apiKey: "ant-test" });
+    const result = await provider.analyze({ taskId: "t1", prompt: "oi" });
+    expect(result.usage).toEqual({ inputTokens: 120, outputTokens: 45 });
+  });
+
+  it("OpenAI (Responses API): usage é capturado no formato input/output_tokens", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        output: [{ type: "message", content: [{ type: "output_text", text: "ok" }] }],
+        model: "gpt-5.6-terra",
+        status: "completed",
+        usage: { input_tokens: 10, output_tokens: 5 },
+      }),
+    );
+    const provider = new OpenAIProvider({ apiKey: "sk-test" });
+    const result = await provider.analyze({ taskId: "t2", prompt: "oi" });
+    expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5 });
+  });
+
+  it("Gemini: finishReason=MAX_TOKENS vira erro; usageMetadata é capturado no caso normal", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: "cortad" }] }, finishReason: "MAX_TOKENS" }] }),
+    );
+    const provider = new GeminiProvider({ apiKey: "gem-test" });
+    await expect(provider.analyze({ taskId: "t1", prompt: "oi" })).rejects.toThrow(/MAX_TOKENS/);
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        candidates: [{ content: { parts: [{ text: "ok" }] }, finishReason: "STOP" }],
+        usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 3 },
+      }),
+    );
+    const result = await provider.analyze({ taskId: "t2", prompt: "oi" });
+    expect(result.usage).toEqual({ inputTokens: 8, outputTokens: 3 });
   });
 });

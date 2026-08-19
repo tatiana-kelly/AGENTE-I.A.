@@ -22,9 +22,25 @@ Ver [DISCOVERY-REPORT.md](DISCOVERY-REPORT.md) para o levantamento que precedeu 
 
 O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION`/`UNKNOWN`), resolve contexto, decide roteamento, monta e encadeia o plano multi-agente, aplica segurança e reserva de custo **antes** da chamada, executa fallback controlado, valida sem autorrevisão e registra tarefas, runs e evidências inclusive para bloqueios/erros. `UNKNOWN`, custo sem teto configurado e pedido de aprovação de provider falham fechados.
 
-**Testes locais:** 60 testes em 8 arquivos, além de `typecheck` e `build`. Continuam sendo testes locais/mockados; não substituem certificação real dos providers, aplicação das migrations nem validação com n8n/Cowork/Claude Code/Codex.
+O **Memory Controller** evita reprocessamento de tarefas `READ` idênticas. A chave inclui tarefa normalizada, projeto, snapshot de contexto, arquivos ausentes, classificação e plano. Somente uma tarefa `completed`, ainda vigente e com validação `APPROVED` pode ser reutilizada; `reusePolicy: "refresh"` força nova análise. Cada hit cria nova tarefa/run/evidência, registra a origem e executa zero chamadas de provider.
+
+**Testes locais:** 72 testes em 8 arquivos, além de `typecheck` e `build`. Continuam sendo testes locais/mockados; não substituem certificação real dos providers, aplicação das migrations nem validação com n8n/Cowork/Claude Code/Codex.
 
 **Único provider ativo hoje: Anthropic** (única chave de IA encontrada no ecossistema local — ver `DISCOVERY-REPORT.md`). OpenAI/Manus/Gemini estão implementados mas sem chave configurada.
+
+### Política de modelos por papel
+
+O Router seleciona um `modelProfile` por etapa, sem transformar cada modelo em um provider diferente:
+
+| Perfil | OpenAI | Anthropic | Uso |
+|---|---|---|---|
+| `fast` | GPT-5.6 Luna | Claude Sonnet 5 | triagem e tarefas curtas |
+| `balanced` | GPT-5.6 Terra | Claude Sonnet 5 | análises e trabalho cotidiano |
+| `critical` | GPT-5.6 Sol | Claude Opus 5 | decisões, revisão e implementação complexa |
+| `adversarial` | GPT-5.6 Sol | Claude Fable 5 | contra-análise e auditoria adversarial |
+| `builder` | GPT-5.6 Sol | Claude Opus 5 | construção complexa; Fable fica reservado a trabalho explicitamente adversarial/long-horizon |
+
+Uma tarefa reconhecida como auditoria adversarial usa a cadeia `GPT-5.6 Sol → Claude Fable 5 → GPT-5.6 Sol`. Os limites de saída continuam explícitos e o Cost Controller reserva custo antes de cada chamada.
 
 ⚠️ **Teste real histórico** (`scripts/real-test.mjs`) — chegou à API Anthropic, mas falhou por falta de crédito antes de validar o caminho de sucesso. Ver [REAL-TEST-REPORT.md](REAL-TEST-REPORT.md). Precisa ser repetido após configurar billing e `ANTHROPIC_MAX_COST_PER_CALL_USD`.
 
@@ -46,6 +62,7 @@ O orchestrator classifica a tarefa e seu efeito (`READ`/`WRITE`/`EXTERNAL_ACTION
 | `validationEngine.ts` | Retorna `APPROVED`/`REJECTED`/`NEEDS_HUMAN` e bloqueia autorrevisão |
 | `evidenceManager.ts` | Registra sucesso, bloqueio, skip, erro e fallback |
 | `costController.ts` | Reserva teto acumulado antes de cada chamada; custo desconhecido bloqueia |
+| `memoryController.ts` | Deduplica resultados READ aprovados por projeto/contexto e controla validade/refresh |
 | `securityLayer.ts` | Modos `READ_ONLY`/`ASSISTED`/`AUTONOMOUS` + `DRY_RUN` (FASE 7) |
 | `observability.ts` | Log estruturado; métrica indisponível vira `"unknown"`, nunca é inventada (FASE 17) |
 | `index.ts` | `orchestrate()` — amarra tudo acima |
@@ -100,11 +117,53 @@ npm run build
 npm run mcp:start
 ```
 
-Ferramentas expostas: `projects_list`, `projects_get_context` e `tasks_get`. Todas filtram por `ai_project_permissions`; projeto não autorizado é omitido sem confirmar sua existência. O processo MCP possui a chave de backend, mas ela não é devolvida ao agente. Para Cowork remoto/serviços compartilhados, não exponha stdio nem uma chave estática: aguarde o transporte HTTP com OAuth.
+Ferramentas expostas: `projects_list`, `projects_get_context` e `tasks_get`. Todas filtram por `ai_project_permissions`; projeto não autorizado é omitido sem confirmar sua existência. O processo MCP possui a chave de backend, mas ela não é devolvida ao agente. Para Cowork e serviços compartilhados, use somente o transporte HTTP com OAuth descrito abaixo.
+
+## MCP remoto para Claude, Cowork e Claude Code
+
+O endpoint `https://<dominio>/mcp` usa Streamable HTTP stateless e OAuth 2.0 com cliente confidencial, PKCE S256, access token de uma hora, refresh token e authorization code de uso único. A chave `service_role` permanece somente no backend. O conector expõe:
+
+- `projects_list` e `projects_get_context` para contexto autorizado;
+- `tasks_get` para rastreabilidade;
+- `tasks_run_audit` para executar o Orchestrator preservando gates de segurança e custo.
+
+O MCP remoto não expõe aprovação. Tarefas em `awaiting_approval` continuam somente pelo canal humano autenticado já existente (`POST /tasks/:id/continue`, normalmente acionado pelo n8n).
+
+Antes do deploy, aplique `supabase/migrations/202608190001_create_oauth_grants.sql` e configure segredos independentes:
+
+```text
+MCP_OAUTH_ISSUER=https://SEU-DOMINIO-VERCEL
+MCP_OAUTH_CLIENT_ID=sal-claude
+MCP_OAUTH_CLIENT_SECRET=<aleatorio-32+-caracteres>
+MCP_CONNECTOR_SECRET=<aleatorio-32+-caracteres>
+MCP_TOKEN_SIGNING_SECRET=<aleatorio-32+-caracteres>
+MCP_PRINCIPAL_TYPE=agent
+MCP_PRINCIPAL_ID=claude
+```
+
+Cadastre no Claude o URL `<MCP_OAUTH_ISSUER>/mcp`, o client ID e o client secret. A tela de autorização solicita `MCP_CONNECTOR_SECRET`, nunca uma chave Supabase. Os callbacks aceitos são exclusivamente `https://claude.ai/api/mcp/auth_callback` e loopback `localhost`/`127.0.0.1` para Claude Code.
+
+Conceda capacidades separadamente por projeto:
+
+```bash
+npm run project:grant -- meu-projeto --type agent --principal claude --capability read_context
+npm run project:grant -- meu-projeto --type agent --principal claude --capability audit
+```
+
+O marketplace privado está em `.claude-plugin/marketplace.json`. Após publicar no branch padrão:
+
+```text
+/plugin marketplace add tatiana-kelly/AGENTE-I.A.
+/plugin install sal-ai-orchestrator@sal-ai-tools
+```
+
+O plugin inicia desabilitado por segurança. Depois de revisar seus componentes, habilite-o. As descrições curtas fazem seleção automática sem carregar os prompts completos dos agentes em toda sessão.
 
 ## Modos de execução (FASE 7)
 
 Default é sempre `READ_ONLY` com `DRY_RUN=true` — ver `.env.example`. Só `READ` explícito passa nesse modo; `UNKNOWN` bloqueia. Provider capaz de efeitos externos é reavaliado como `EXTERNAL_ACTION`. Cada provider real também precisa declarar `*_MAX_COST_PER_CALL_USD`; sem teto, a chamada é bloqueada antes de gerar custo.
+
+`RESULT_MEMORY_ENABLED=true` habilita a deduplicação persistente e `RESULT_MEMORY_MAX_AGE_HOURS=168` define validade padrão de sete dias. A resposta expõe `memory.status` (`hit`, `miss`, `bypassed` ou `ineligible`), a chave e, em hits, a tarefa de origem. Falha na consulta de memória não bloqueia a execução normal.
 
 ## Persistência Supabase (FASE 11)
 
@@ -118,7 +177,7 @@ As três migrations foram aplicadas em 17/08/2026 ao projeto Supabase exclusivo 
 
 Todos os endpoints exigem `Authorization: Bearer <N8N_WEBHOOK_SECRET>`; o segredo precisa ter ao menos 32 caracteres. O modo de execução vem exclusivamente do ambiente do servidor e não pode ser alterado pelo payload.
 
-- `POST /orchestrate` — recebe `{ "task": "...", "project": "opcional" }`.
+- `POST /orchestrate` — recebe `{ "task": "...", "project": "opcional", "reusePolicy": "allow|refresh" }`.
 - `GET /tasks/:id` — retorna tarefa, runs e evidências persistidas.
 - `POST /tasks/:id/continue` — recebe `{ "approved": true, "approvedMaxCostUsd": 0.50 }` para uma tarefa em `awaiting_approval`.
 

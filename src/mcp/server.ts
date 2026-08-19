@@ -2,10 +2,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { OrchestrationRepository } from "../persistence/index.js";
 import { canAccessProject, listAccessibleProjects, type ProjectPrincipal } from "../projects/index.js";
+import type { OrchestrationResult } from "../orchestrator/types.js";
 
 export interface ProjectMcpDependencies {
   repository: OrchestrationRepository;
   principal: ProjectPrincipal;
+  runTask?: (input: { task: string; project: string; reusePolicy?: "allow" | "refresh" }) => Promise<OrchestrationResult>;
 }
 
 export function createProjectMcpServer(dependencies: ProjectMcpDependencies): McpServer {
@@ -75,6 +77,27 @@ export function createProjectMcpServer(dependencies: ProjectMcpDependencies): Mc
       return asJsonResult(snapshot);
     },
   );
+
+  if (dependencies.runTask) {
+    server.registerTool(
+      "tasks_run_audit",
+      {
+        title: "Executar auditoria autorizada",
+        description: "Executa o Orchestrator em um projeto autorizado. O gate de segurança, custo, evidência e aprovação humana continua obrigatório.",
+        inputSchema: {
+          task: z.string().trim().min(1).max(100_000),
+          projectId: z.string().min(3).max(64),
+          reusePolicy: z.enum(["allow", "refresh"]).optional(),
+        },
+      },
+      async ({ task, projectId, reusePolicy }) => {
+        if (!(await canAccessProject(dependencies.repository, projectId, dependencies.principal, "audit"))) {
+          return toolError("Projeto inexistente ou acesso de auditoria negado.");
+        }
+        return asJsonResult(await dependencies.runTask!({ task, project: projectId, reusePolicy }));
+      },
+    );
+  }
 
   return server;
 }

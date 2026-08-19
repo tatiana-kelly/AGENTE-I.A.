@@ -1,4 +1,4 @@
-import type { ProviderName } from "../providers/types.js";
+import type { ModelProfile, ProviderName } from "../providers/types.js";
 import type { ResolvedContext } from "./contextResolver.js";
 
 /** FASE 6 skill catalog. */
@@ -36,6 +36,7 @@ export interface ClassificationResult {
   requiresInvestigation: boolean;
   requiresImplementation: boolean;
   requiresDecision: boolean;
+  requiresAdversarialReview: boolean;
   /** Short justification only — never chain-of-thought (FASE 8). */
   rationale: string;
 }
@@ -52,6 +53,7 @@ export interface RoutingDecision {
 export interface PlanStep {
   provider: ProviderName;
   purpose: string;
+  modelProfile?: ModelProfile;
 }
 
 export interface TaskPlan {
@@ -83,6 +85,8 @@ export interface EvidenceRecord {
 export interface OrchestrationRequest {
   task: string;
   project?: string;
+  /** `refresh` ignora resultados persistidos e força uma nova análise. */
+  reusePolicy?: "allow" | "refresh";
 }
 
 export type StepStatus = "success" | "error" | "skipped";
@@ -97,6 +101,7 @@ export interface StepExecutionResult {
   output?: string;
   /** Motivo do skip/erro — nunca lançado sem ser reportado (FASE 10). */
   reason?: string;
+  reusedFromTaskId?: string;
 }
 
 export interface OrchestrationResult {
@@ -111,6 +116,12 @@ export interface OrchestrationResult {
   /** Vazio quando o gate de segurança bloqueou a execução (ver `requiresApproval`). */
   results: StepExecutionResult[];
   evidence: EvidenceRecord[];
+  memory: {
+    status: "hit" | "miss" | "bypassed" | "ineligible";
+    key: string;
+    reason: string;
+    reusedFromTaskId?: string;
+  };
   validation?: {
     reviewed: boolean;
     status: ValidationStatus;

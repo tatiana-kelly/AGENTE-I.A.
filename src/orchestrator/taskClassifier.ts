@@ -8,6 +8,7 @@ interface ClassificationRule {
   requiresInvestigation?: boolean;
   requiresImplementation?: boolean;
   requiresDecision?: boolean;
+  requiresAdversarialReview?: boolean;
 }
 
 /**
@@ -17,6 +18,13 @@ interface ClassificationRule {
  * itself, so routing decisions stay explainable and reproducible.
  */
 const RULES: ClassificationRule[] = [
+  {
+    id: "adversarial-audit",
+    pattern: /\b(auditor\w*|auditoria\w*|adversarial|contra-an[aá]lise|red[ -]?team)\b/i,
+    skills: ["architecture", "business-analysis"],
+    requiresDecision: true,
+    requiresAdversarialReview: true,
+  },
   {
     id: "investigation",
     pattern: /\b(investigu\w*|descobr\w*|descubr\w*|apur\w*|explor\w*|pesquis\w*|por qu[eê])\b/i,
@@ -133,6 +141,7 @@ export function classifyTask(task: string): ClassificationResult {
     requiresImplementation:
       effectLevel !== "READ" && matched.some((rule) => rule.requiresImplementation === true),
     requiresDecision: matched.some((rule) => rule.requiresDecision === true),
+    requiresAdversarialReview: matched.some((rule) => rule.requiresAdversarialReview === true),
     rationale:
       matched.length > 0
         ? `Regras acionadas: ${matched.map((rule) => rule.id).join(", ")}. Efeito: ${effectLevel}.`

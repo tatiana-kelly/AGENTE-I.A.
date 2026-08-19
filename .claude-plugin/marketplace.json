@@ -1,0 +1,12 @@
+{
+  "name": "sal-ai-tools",
+  "owner": { "name": "SAL Express" },
+  "description": "Plugins privados de governança e orquestração de IA da SAL Express.",
+  "plugins": [
+    {
+      "name": "sal-ai-orchestrator",
+      "source": "./plugins/sal-ai-orchestrator",
+      "description": "Auditoria multiagente, execução governada e contexto autorizado dos projetos SAL."
+    }
+  ]
+}

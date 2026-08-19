@@ -1,5 +1,5 @@
 import { describeProviderError, fetchJson } from "./httpClient.js";
-import type { AIProvider, HealthStatus, TaskInput, TaskResult } from "./types.js";
+import type { AIProvider, HealthStatus, ModelProfile, TaskInput, TaskResult } from "./types.js";
 
 export interface OpenAIProviderConfig {
   apiKey: string;
@@ -8,15 +8,21 @@ export interface OpenAIProviderConfig {
   baseUrl?: string;
   timeoutMs?: number;
   estimatedMaxCostUsd?: number;
+  reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh" | "max";
+  models?: Partial<Record<ModelProfile, string>>;
+  maxOutputTokens?: number;
 }
 
-const DEFAULT_MODEL = "gpt-4o-mini";
+const DEFAULT_MODEL = "gpt-5.6-sol";
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 
-interface ChatCompletionResponse {
-  choices: Array<{ message: { content: string | null }; finish_reason: string }>;
+interface ResponsesApiResponse {
+  output: Array<{ type: string; content?: Array<{ type: string; text?: string }> }>;
   model: string;
-  usage?: { prompt_tokens: number; completion_tokens: number };
+  status?: string;
+  incomplete_details?: { reason?: string } | null;
+  /** Formato da Responses API (difere do chat/completions: input/output, não prompt/completion). */
+  usage?: { input_tokens: number; output_tokens: number };
 }
 
 interface ModelsListResponse {
@@ -35,6 +41,9 @@ export class OpenAIProvider implements AIProvider {
   private readonly model: string;
   private readonly baseUrl: string;
   private readonly timeoutMs?: number;
+  private readonly reasoningEffort: "none" | "low" | "medium" | "high" | "xhigh" | "max";
+  private readonly models: Record<ModelProfile, string>;
+  private readonly maxOutputTokens: number;
 
   constructor(config: OpenAIProviderConfig) {
     if (!config.apiKey) {
@@ -44,6 +53,15 @@ export class OpenAIProvider implements AIProvider {
     this.model = config.model ?? DEFAULT_MODEL;
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.timeoutMs = config.timeoutMs;
+    this.reasoningEffort = config.reasoningEffort ?? "medium";
+    this.models = {
+      fast: config.models?.fast ?? "gpt-5.6-luna",
+      balanced: config.models?.balanced ?? config.model ?? "gpt-5.6-terra",
+      critical: config.models?.critical ?? "gpt-5.6-sol",
+      adversarial: config.models?.adversarial ?? "gpt-5.6-sol",
+      builder: config.models?.builder ?? "gpt-5.6-sol",
+    };
+    this.maxOutputTokens = config.maxOutputTokens ?? 4096;
     this.capabilities = {
       mayProduceExternalEffects: false,
       estimatedMaxCostUsd: config.estimatedMaxCostUsd,
@@ -51,7 +69,8 @@ export class OpenAIProvider implements AIProvider {
   }
 
   async analyze(input: TaskInput): Promise<TaskResult> {
-    const response = await fetchJson<ChatCompletionResponse>(`${this.baseUrl}/chat/completions`, {
+    const model = this.models[input.modelProfile ?? "balanced"];
+    const response = await fetchJson<ResponsesApiResponse>(`${this.baseUrl}/responses`, {
       method: "POST",
       timeoutMs: this.timeoutMs,
       headers: {
@@ -59,27 +78,31 @@ export class OpenAIProvider implements AIProvider {
         authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify({
-        model: this.model,
-        messages: [{ role: "user", content: input.prompt }],
+        model,
+        input: input.prompt,
+        reasoning: { effort: this.reasoningEffort },
+        max_output_tokens: this.maxOutputTokens,
       }),
     });
 
-    // Mesma classe de bug do fix a6e1440: "length" = resposta cortada pelo
-    // limite de tokens — erro claro em vez de output truncado silencioso.
-    const choice = response.choices[0];
-    if (choice?.finish_reason === "length") {
-      throw new Error(
-        "Resposta da OpenAI truncada pelo limite de tokens (finish_reason=length). " +
-          "O output parcial não é entregue — reduza o escopo da tarefa ou aumente o limite.",
-      );
+    if (response.status === "incomplete") {
+      throw new Error(`Resposta OpenAI incompleta: ${response.incomplete_details?.reason ?? "motivo não informado"}.`);
     }
 
+    const output = response.output
+      .filter((item) => item.type === "message")
+      .flatMap((item) => item.content ?? [])
+      .filter((content) => content.type === "output_text")
+      .map((content) => content.text ?? "")
+      .join("\n");
+
     return {
-      output: choice?.message.content ?? "",
+      output,
+      model: response.model ?? model,
       sources: [],
       evidence: [],
       usage: response.usage
-        ? { inputTokens: response.usage.prompt_tokens, outputTokens: response.usage.completion_tokens }
+        ? { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
         : undefined,
       raw: response,
     };

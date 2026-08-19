@@ -40,6 +40,7 @@ const classificationSchema = z.object({
   requiresInvestigation: z.boolean(),
   requiresImplementation: z.boolean(),
   requiresDecision: z.boolean(),
+  requiresAdversarialReview: z.boolean().default(false),
   rationale: z.string(),
 });
 const routingSchema = z.object({
@@ -51,7 +52,11 @@ const routingSchema = z.object({
 });
 const planSchema = z.object({
   mode: z.enum(["ONE_AGENT", "MULTI_AGENT"]),
-  steps: z.array(z.object({ provider: providerNameSchema, purpose: z.string() })),
+  steps: z.array(z.object({
+    provider: providerNameSchema,
+    purpose: z.string(),
+    modelProfile: z.enum(["fast", "balanced", "critical", "adversarial", "builder"]).optional(),
+  })),
 });
 const validationSchema = z.object({
   reviewed: z.boolean(),
@@ -155,6 +160,26 @@ export class SupabaseOrchestrationRepository implements OrchestrationRepository 
     this.fetchImpl = config.fetchImpl ?? fetch;
   }
 
+  async createOAuthGrant(grantId: string, expiresAt: string): Promise<void> {
+    await this.request("ai_oauth_grants", {
+      method: "POST",
+      body: JSON.stringify({ grant_id: grantId, expires_at: expiresAt }),
+    });
+  }
+
+  async consumeOAuthGrant(grantId: string, consumedAt: string): Promise<boolean> {
+    const response = await this.request(
+      `ai_oauth_grants?grant_id=eq.${encodeURIComponent(grantId)}&consumed_at=is.null&expires_at=gt.${encodeURIComponent(consumedAt)}&select=grant_id`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({ consumed_at: consumedAt }),
+      },
+    );
+    const rows = z.array(z.object({ grant_id: z.string() })).parse(await response.json());
+    return rows.length === 1;
+  }
+
   async createTask(task: OrchestrationTaskRecord): Promise<void> {
     await this.request("ai_tasks", { method: "POST", body: JSON.stringify(toTaskRow(task)) });
   }
@@ -213,6 +238,23 @@ export class SupabaseOrchestrationRepository implements OrchestrationRepository 
       runs: z.array(runRowSchema).parse(runRows).map(fromRunRow),
       evidence: z.array(evidenceRowSchema).parse(evidenceRows).map(fromEvidenceRow),
     };
+  }
+
+  async findReusableTaskByEvidenceSource(source: string, newerThan: string): Promise<PersistedTaskSnapshot | undefined> {
+    const query = new URLSearchParams({
+      status: "eq.success",
+      recorded_at: `gte.${newerThan}`,
+      sources: `cs.{${JSON.stringify(source)}}`,
+      select: "*",
+      order: "recorded_at.desc",
+      limit: "20",
+    });
+    const rows = z.array(evidenceRowSchema).parse(await this.requestJson(`ai_evidence?${query.toString()}`));
+    for (const row of rows) {
+      const snapshot = await this.getTask(row.task_id);
+      if (snapshot?.task.status === "completed") return snapshot;
+    }
+    return undefined;
   }
 
   async upsertProject(project: ProjectRecord): Promise<void> {

@@ -4,6 +4,7 @@
  */
 
 export type ProviderName = "openai" | "manus" | "anthropic" | "gemini";
+export type ModelProfile = "fast" | "balanced" | "critical" | "adversarial" | "builder";
 
 export interface TaskInput {
   taskId: string;
@@ -11,6 +12,7 @@ export interface TaskInput {
   project?: string;
   context?: Record<string, unknown>;
   skill?: string;
+  modelProfile?: ModelProfile;
 }
 
 /** Tokens medidos, reportados pela própria API do provider — nunca estimados aqui. */
@@ -21,6 +23,7 @@ export interface TokenUsage {
 
 export interface TaskResult {
   output: string;
+  model?: string;
   sources: string[];
   evidence: string[];
   /** 0..1. Only set when the provider itself reports a confidence signal. */

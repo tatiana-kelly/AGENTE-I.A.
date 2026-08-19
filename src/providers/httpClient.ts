@@ -81,7 +81,11 @@ async function fetchJsonOnce<T>(url: string, init: RequestInit, timeoutMs: numbe
 
     if (!response.ok) {
       const detail = typeof body === "string" ? body : JSON.stringify(body);
-      const error = new ProviderHttpError(response.status, body, `HTTP ${response.status} de ${url}: ${detail}`);
+      const error = new ProviderHttpError(
+        response.status,
+        body,
+        `HTTP ${response.status} de ${sanitizeUrlForLogs(url)}: ${detail}`,
+      );
       error.retryAfterMs = parseRetryAfter(response.headers.get("retry-after"));
       throw error;
     }
@@ -124,6 +128,18 @@ function parseRetryAfter(header: string | null): number | undefined {
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Removes query-string credentials and fragments before a URL reaches logs or evidence. */
+export function sanitizeUrlForLogs(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "[invalid-url]";
+  }
 }
 
 export function describeProviderError(error: unknown): string {

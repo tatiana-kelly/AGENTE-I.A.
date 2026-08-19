@@ -16,6 +16,19 @@ export class InMemoryOrchestrationRepository implements OrchestrationRepository 
   private readonly evidence: EvidenceRecord[] = [];
   private readonly projects = new Map<string, ProjectRecord>();
   private readonly projectPermissions = new Map<string, ProjectPermissionRecord>();
+  private readonly oauthGrants = new Map<string, { expiresAt: string; consumedAt?: string }>();
+
+  async createOAuthGrant(grantId: string, expiresAt: string): Promise<void> {
+    if (this.oauthGrants.has(grantId)) throw new Error("OAuth grant já existe.");
+    this.oauthGrants.set(grantId, { expiresAt });
+  }
+
+  async consumeOAuthGrant(grantId: string, consumedAt: string): Promise<boolean> {
+    const grant = this.oauthGrants.get(grantId);
+    if (!grant || grant.consumedAt || grant.expiresAt <= consumedAt) return false;
+    this.oauthGrants.set(grantId, { ...grant, consumedAt });
+    return true;
+  }
 
   async createTask(task: OrchestrationTaskRecord): Promise<void> {
     if (this.tasks.has(task.id)) throw new Error(`Task ${task.id} já existe.`);
@@ -60,6 +73,14 @@ export class InMemoryOrchestrationRepository implements OrchestrationRepository 
       runs: [...this.runs.values()].filter((run) => run.taskId === taskId),
       evidence: this.evidence.filter((record) => record.task_id === taskId),
     });
+  }
+
+  async findReusableTaskByEvidenceSource(source: string, newerThan: string): Promise<PersistedTaskSnapshot | undefined> {
+    const match = this.evidence
+      .filter((record) => record.status === "success" && record.timestamp >= newerThan && record.sources.includes(source))
+      .filter((record) => this.tasks.get(record.task_id)?.status === "completed")
+      .sort((left, right) => right.timestamp.localeCompare(left.timestamp))[0];
+    return match ? this.getTask(match.task_id) : undefined;
   }
 
   async upsertProject(project: ProjectRecord): Promise<void> {
