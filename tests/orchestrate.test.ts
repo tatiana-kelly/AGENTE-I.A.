@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { orchestrate } from "../src/orchestrator/index.js";
 import { ProviderManager } from "../src/orchestrator/providerManager.js";
 import { InMemoryEvidenceSink } from "../src/orchestrator/evidenceManager.js";
+import { InMemoryOrchestrationRepository } from "../src/persistence/index.js";
 import type { AIProvider, HealthStatus, ProviderCapabilities, TaskInput, TaskResult } from "../src/providers/types.js";
 
 const FIXTURES_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "projects");
@@ -230,6 +231,55 @@ describe("orchestrate() — execução ponta a ponta", () => {
     expect(result.routing.reviewer).toBe("openai");
     expect(result.validation).toMatchObject({ reviewed: true, status: "APPROVED", reviewer: "openai" });
     expect(result.evidence).toHaveLength(2); // resultado primário + revisão
+  });
+
+  it("reutiliza resultado READ aprovado sem chamar providers novamente", async () => {
+    const repository = new InMemoryOrchestrationRepository();
+    const manager = new ProviderManager();
+    const manus = new FakeProvider("manus", "diagnóstico estável");
+    const openai = new FakeProvider("openai", '{"status":"APPROVED","summary":"resultado consistente"}');
+    manager.register(manus);
+    manager.register(openai);
+
+    const first = await orchestrate(
+      { task: "Analise os dados e me diga o que está acontecendo.", project: "sal" },
+      { security: { mode: "AUTONOMOUS", dryRun: false }, providerManager: manager, repository },
+    );
+    const second = await orchestrate(
+      { task: "Analise os dados e me diga o que está acontecendo.", project: "sal" },
+      { security: { mode: "AUTONOMOUS", dryRun: false }, providerManager: manager, repository },
+    );
+
+    expect(first.memory.status).toBe("miss");
+    expect(second.memory).toMatchObject({ status: "hit", reusedFromTaskId: first.taskId });
+    expect(second.results[0]).toMatchObject({
+      status: "success",
+      output: "diagnóstico estável",
+      reusedFromTaskId: first.taskId,
+    });
+    expect(manus.inputs).toHaveLength(1);
+    expect(openai.inputs).toHaveLength(1);
+    expect(second.evidence[0]?.limitations).toContain("sem custo de IA");
+  });
+
+  it("permite forçar refresh sem apagar a memória anterior", async () => {
+    const repository = new InMemoryOrchestrationRepository();
+    const manager = new ProviderManager();
+    const manus = new FakeProvider("manus", "diagnóstico");
+    const openai = new FakeProvider("openai", '{"status":"APPROVED","summary":"ok"}');
+    manager.register(manus);
+    manager.register(openai);
+    const options = { security: { mode: "AUTONOMOUS" as const, dryRun: false }, providerManager: manager, repository };
+
+    await orchestrate({ task: "Analise os dados e me diga o que está acontecendo." }, options);
+    const refreshed = await orchestrate(
+      { task: "Analise os dados e me diga o que está acontecendo.", reusePolicy: "refresh" },
+      options,
+    );
+
+    expect(refreshed.memory.status).toBe("bypassed");
+    expect(manus.inputs).toHaveLength(2);
+    expect(openai.inputs).toHaveLength(2);
   });
 
   it("encaminha para humano quando OpenAI produz o resultado sem reviewer independente", async () => {

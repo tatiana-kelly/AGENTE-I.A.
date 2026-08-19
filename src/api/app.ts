@@ -9,6 +9,7 @@ import type { ProviderManager } from "../orchestrator/providerManager.js";
 const orchestrateBodySchema = z.object({
   task: z.string().trim().min(1).max(100_000),
   project: z.string().trim().min(1).max(200).regex(/^[a-zA-Z0-9_-]+$/).optional(),
+  reusePolicy: z.enum(["allow", "refresh"]).optional(),
 }).strict();
 
 const continueBodySchema = z.object({

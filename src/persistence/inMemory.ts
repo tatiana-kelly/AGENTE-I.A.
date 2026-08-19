@@ -62,6 +62,14 @@ export class InMemoryOrchestrationRepository implements OrchestrationRepository 
     });
   }
 
+  async findReusableTaskByEvidenceSource(source: string, newerThan: string): Promise<PersistedTaskSnapshot | undefined> {
+    const match = this.evidence
+      .filter((record) => record.status === "success" && record.timestamp >= newerThan && record.sources.includes(source))
+      .filter((record) => this.tasks.get(record.task_id)?.status === "completed")
+      .sort((left, right) => right.timestamp.localeCompare(left.timestamp))[0];
+    return match ? this.getTask(match.task_id) : undefined;
+  }
+
   async upsertProject(project: ProjectRecord): Promise<void> {
     this.projects.set(project.id, structuredClone(project));
   }

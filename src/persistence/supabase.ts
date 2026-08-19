@@ -220,6 +220,23 @@ export class SupabaseOrchestrationRepository implements OrchestrationRepository 
     };
   }
 
+  async findReusableTaskByEvidenceSource(source: string, newerThan: string): Promise<PersistedTaskSnapshot | undefined> {
+    const query = new URLSearchParams({
+      status: "eq.success",
+      recorded_at: `gte.${newerThan}`,
+      sources: `cs.{${JSON.stringify(source)}}`,
+      select: "*",
+      order: "recorded_at.desc",
+      limit: "20",
+    });
+    const rows = z.array(evidenceRowSchema).parse(await this.requestJson(`ai_evidence?${query.toString()}`));
+    for (const row of rows) {
+      const snapshot = await this.getTask(row.task_id);
+      if (snapshot?.task.status === "completed") return snapshot;
+    }
+    return undefined;
+  }
+
   async upsertProject(project: ProjectRecord): Promise<void> {
     await this.request("ai_projects?on_conflict=id", {
       method: "POST",
