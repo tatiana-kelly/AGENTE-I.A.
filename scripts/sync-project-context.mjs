@@ -44,7 +44,10 @@ if (!SAFE_PROJECT_NAME.test(projectId)) {
 const sourceDir = path.resolve(projectRoot, ".ai");
 const targetDir = path.resolve(process.cwd(), "projects", projectId);
 
-await mkdir(targetDir, { recursive: true });
+if (!checkOnly) await mkdir(targetDir, { recursive: true });
+
+// CRLF vs LF não é defasagem: o checkout no Windows converte finais de linha.
+const normalize = (text) => text.replace(/\r\n/g, "\n");
 
 const stale = [];
 const missing = [];
@@ -53,7 +56,7 @@ let written = 0;
 for (const fileName of CONTEXT_FILES) {
   let source;
   try {
-    source = await readFile(path.join(sourceDir, fileName), "utf8");
+    source = normalize(await readFile(path.join(sourceDir, fileName), "utf8"));
   } catch {
     missing.push(fileName);
     continue;
@@ -62,7 +65,7 @@ for (const fileName of CONTEXT_FILES) {
   const targetPath = path.join(targetDir, fileName);
   let current = null;
   try {
-    current = await readFile(targetPath, "utf8");
+    current = normalize(await readFile(targetPath, "utf8"));
   } catch {
     // espelho ainda não existe
   }
@@ -74,6 +77,12 @@ for (const fileName of CONTEXT_FILES) {
     await writeFile(targetPath, source, "utf8");
     written += 1;
   }
+}
+
+// Nenhum arquivo na origem quase sempre é caminho errado — não pode passar como "em dia".
+if (missing.length === CONTEXT_FILES.length) {
+  console.error(`Nenhum arquivo de contexto em ${sourceDir}. Confira o caminho do projeto.`);
+  process.exit(1);
 }
 
 if (missing.length > 0) {
