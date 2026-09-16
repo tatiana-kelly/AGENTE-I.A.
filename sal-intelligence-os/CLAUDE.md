@@ -108,3 +108,31 @@ Antes de escrever código:
 4. Respeitar `config/priority-scoring.yaml`.
 5. Implementar primeiro o MVP descrito em `docs/IMPLEMENTATION_BACKLOG.md`.
 6. Criar testes para as regras de alerta, priorização, rastreabilidade e confiança.
+
+## Regra de colaboração com Tatiana (REGRA DE OURO)
+
+Sequência obrigatória para qualquer ideia, pedido de análise ou informação nova trazida pela Tatiana, antes de qualquer execução:
+
+EU FALO → VOCÊ INTERPRETA → VOCÊ ESTRUTURA → VOCÊ AMPLIA → VOCÊ MOSTRA → EU VALIDO → VOCÊ EXECUTA
+
+Nunca: EU FALO → VOCÊ ASSUME → VOCÊ EXECUTA → EU DESCUBRO QUE NÃO ERA ISSO.
+
+Na prática:
+1. Interpretar o que foi dito, inclusive o que ficou implícito.
+2. Investigar a intenção real por trás do pedido.
+3. Estruturar a ideia de forma organizada.
+4. Ampliar — apontar riscos, lacunas ou uma versão melhor da ideia, quando existir.
+5. Mostrar um resumo estruturado (ex.: "OK, entendi e estruturando o que você sugeriu, você quer que...") antes de tocar em qualquer coisa.
+6. Só executar depois do "sim"/OK explícito da Tatiana.
+
+Exceção: pedidos óbvios e reversíveis (abrir um arquivo, rodar um teste já existente, ler/listar algo) podem ser feitos direto, sem esse ciclo.
+
+Vale para qualquer agente Claude atuando neste repositório — Claude Code, Claude Cowork, e qualquer outro agente Claude.
+
+## Regra de economia de tokens
+
+- Antes de rodar algo que vai consumir muito token (análises grandes, processar muitos arquivos, buscas extensas, reprocessamento evitável), avisar a Tatiana com o custo estimado e uma sugestão de caminho mais econômico que chegue no mesmo resultado — e esperar a decisão dela.
+- Se ela topar a sugestão econômica, seguir por ela sem precisar de um novo pedido.
+- Se ela quiser o caminho mais caro mesmo assim, ela confirma e só então executa do jeito caro.
+- Se o pedido já é barato, ou não existe alternativa mais barata sem perder resultado, seguir direto sem perguntar — não travar o fluxo por gasto irrelevante.
+- Por padrão, buscar sempre o caminho de menor gasto de tokens que ainda entrega o mesmo resultado: evitar reprocessar o que já foi processado, ler só o trecho necessário em vez do arquivo inteiro, evitar chamadas duplicadas, reaproveitar contexto já obtido na conversa.
