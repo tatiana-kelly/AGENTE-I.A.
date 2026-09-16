@@ -20,4 +20,21 @@ Cada subpasta aqui é um projeto que o Orchestrator sabe carregar contexto para,
 
 ## Projetos existentes
 
-Nenhum ainda — `_template/` é só o esqueleto. Populário reais deve vir de quem conhece o projeto de verdade (não inventar regra de negócio a partir de suposição).
+| Pasta | `project_id` | Repositório | Dono do contexto |
+|---|---|---|---|
+| `torre-controle/` | `torre-controle` | `tatiana-kelly/Torre-de-Controle-` | O repo da Torre, em `.ai/` — esta pasta é **espelho** |
+
+`_template/` é só o esqueleto. Conteúdo real vem de quem conhece o projeto de verdade — não inventar regra de negócio a partir de suposição.
+
+## Espelho vs. dono do contexto
+
+O Orchestrator roda na Vercel e **não enxerga o filesystem do projeto**, então `projects/<id>/` precisa conter o conteúdo de fato. Mas o dono do contexto é o projeto: cada projeto integrado mantém os 5 arquivos em `.ai/` no repositório dele, e esta pasta é cópia gerada.
+
+Nunca copie à mão — foi assim que `projects/torre-controle/` passou a apontar para um caminho local que não existia mais. Use:
+
+```bash
+node scripts/sync-project-context.mjs torre-controle "C:\Projeto ClaudeCode\Torre-claude"
+node scripts/sync-project-context.mjs --check torre-controle "C:\Projeto ClaudeCode\Torre-claude"
+```
+
+`--check` não escreve nada e sai com código 1 se o espelho estiver defasado.
