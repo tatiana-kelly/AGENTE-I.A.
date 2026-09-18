@@ -21,5 +21,6 @@
     "email_agent": {"path": "C:\\CENTRO-DE-AGENTES-IA", "recipient": null},
     "dedupe_hours": 12
   },
-  "report": {"title": "HERMES AUTOMATION HEALTH"}
+  "report": {"title": "HERMES AUTOMATION HEALTH"},
+  "outbox": {"enabled": false}
 }

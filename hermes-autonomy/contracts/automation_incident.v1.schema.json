@@ -139,6 +139,8 @@
       "required": ["entity_type", "entity_id", "period", "registry_version", "last_success_at", "affected_outputs",
                    "missing_data", "evidence_completeness_pct"],
       "properties": {
+        "metric_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.:-]{2,119}$",
+                      "description": "OPCIONAL. Métrica EMPRESARIAL afetada (id da MetricPolicy do SAL OS). Ausente em incidente puramente técnico; só pode ser informado quando requires_business_decision=true (regra semântica validada em hermes_autonomy.contract)."},
         "entity_type": {"const": "automation"},
         "entity_id": {"type": "string"},
         "period": {"type": "string", "description": "Data da janela esperada (YYYY-MM-DD)."},
@@ -153,5 +155,5 @@
     },
     "audit_ref": {"type": "string", "description": "Referência ao audit_log técnico local do Hermes (ex.: incident_id)."}
   },
-  "$comment": "Chaves PROIBIDAS em qualquer nível (mesma lista do AI Orchestrator /v1/agent-runs): approved_decision, execute_action, executed_action, verified_ok (e variantes camelCase)."
+  "$comment": "Chaves PROIBIDAS em qualquer nível (mesma lista do AI Orchestrator /v1/agent-runs): approved_decision, execute_action, executed_action, verified_ok (e variantes camelCase). Regras semânticas (hermes_autonomy/contract.py): event_id = sha256(incident_id|lifecycle_state); metric_id só com requires_business_decision=true; ai_review_signals espelha confidence/diagnosis/actions_attempted; TECHNICAL_OK só em RESOLVED; nenhum texto com cara de segredo. Status do contrato: FINAL v1.0 (ponte Hermes → SAL OS)."
 }

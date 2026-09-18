@@ -309,6 +309,34 @@ def cmd_start_stop(args) -> int:
     return 0
 
 
+def cmd_outbox(args) -> int:
+    """Outbox LOCAL do AUTOMATION_INCIDENT (ponte Hermes → SAL OS). Nada é enviado a lugar nenhum."""
+    from .contract import IncidentOutbox, validate_event
+    settings = _settings(args)
+    outbox = IncidentOutbox(settings.state_dir / "events")
+    if args.action == "list":
+        events = outbox.events()
+        print(f"{len(events)} evento(s) em {outbox.path}")
+        for e in events:
+            print(f"  {e['timestamp'][:16]} {e['automation_id']:<30} {e['incident_type']:<22} "
+                  f"{e['lifecycle_state']:<9} business={e['requires_business_decision']} {e['event_id'][:19]}…")
+        return 0
+    if args.action == "validate":
+        with open(args.target, encoding="utf-8") as fh:
+            docs = [json.loads(l) for l in fh if l.strip()] if args.target.endswith(".jsonl") else [json.load(fh)]
+        bad = 0
+        for doc in docs:
+            errors = validate_event(doc)
+            bad += bool(errors)
+            print(f"{'OK     ' if not errors else 'INVÁLIDO'} {doc.get('event_id', '?')[:19]}… "
+                  + ("" if not errors else "; ".join(errors[:5])))
+        return 1 if bad else 0
+    from .orchestrator import Orchestrator
+    orch = Orchestrator.build(settings)
+    print(orch.emit_to_outbox([args.target]))
+    return 0
+
+
 TICKER_TASK = "Hermes - Cron Tick"
 
 
@@ -425,6 +453,9 @@ def build_parser() -> argparse.ArgumentParser:
     add("start", cmd_start_stop, "Retoma os cron jobs Hermes do guardião")
     add("stop", cmd_start_stop, "Pausa os cron jobs Hermes do guardião")
     add("skills", cmd_skills, "Skills candidatas geradas por soluções validadas")
+    p = add("outbox", cmd_outbox, "Outbox local do AUTOMATION_INCIDENT: list | validate <arquivo> | emit <incident_id>")
+    p.add_argument("action", choices=["list", "validate", "emit"])
+    p.add_argument("target", nargs="?")
     p = add("ticker", cmd_ticker, "Relógio do cron Hermes via Agendador (sem gateway) — exige --yes")
     p.add_argument("action", choices=["install", "remove", "status"])
     p.add_argument("--minutes", type=int, default=15)

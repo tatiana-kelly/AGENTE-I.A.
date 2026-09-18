@@ -1,0 +1,27 @@
+{
+  "fixture": "fechar_dia_0x80070005",
+  "description": "Primeiro caso da ponte Hermes → SAL OS. Evidência estruturada do incidente REAL observado na auditoria de 18/09/2026 (INC-20260918-104905-44f9, DRY_RUN). O reparo NÃO é executado.",
+  "automation_id": "torre-fechar-dia",
+  "observed_at": "2026-09-18T10:49:05-03:00",
+  "expected_window": "2026-09-17T15:15:00-03:00",
+  "task_scheduler": {
+    "task_name": "\\Torre - Fechar Dia 15h15",
+    "state": "Ready",
+    "last_run": "2026-09-17T15:15:15-03:00",
+    "last_task_result": 2147942405,
+    "last_task_result_hex": "0x80070005",
+    "meaning": "E_ACCESSDENIED — o Agendador não conseguiu iniciar a ação"
+  },
+  "filesystem": {
+    "log_glob": "C:/Projeto ClaudeCode/Torre-de-Controle/snapshot/logs/fechar_dia_15h_*.log",
+    "latest_log": "fechar_dia_15h_2026-09-14_18-37.log",
+    "latest_log_mtime": "2026-09-14T18:41:00-03:00",
+    "interpretation": "nenhum log de fechamento desde 14/09 — a ação não chega a iniciar"
+  },
+  "repair_policy": {
+    "allowed_recovery_actions": [],
+    "idempotent": "unverified",
+    "executed": false,
+    "reason": "causa não transitória (permissão da tarefa) — requer ação humana técnica"
+  }
+}

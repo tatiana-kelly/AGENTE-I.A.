@@ -11,6 +11,7 @@ import sys
 import time
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable
 
 from .adapters import CommandRunRecorder, GithubRunsProvider, SystemExecutor, WindowsTaskProvider
@@ -164,8 +165,36 @@ class Orchestrator:
                 self.store.transition(root["id"], Lifecycle.RESOLVED.value, AGENT, "todos os impactos recuperados")
         summary["root_causes"] = [{"id": r["id"], "cause_key": k, "members": len(roots[k])} for k, r in root_ids.items()]
         summary["statuses"] = dict(summary["statuses"])
+        if (self.settings.data.get("outbox") or {}).get("enabled"):
+            summary["outbox"] = self.emit_to_outbox([i["incident_id"] for i in summary["incidents"]])
         self.store.finish_run(run_id, summary)
         return summary
+
+    # -------------------------------------------------------------- ponte (outbox local)
+    def emit_to_outbox(self, incident_ids: list[str]) -> dict[str, int]:
+        """Hermes → AUTOMATION_INCIDENT → outbox local validado. Sem consumidor, sem envio, sem IA."""
+        from .contract import IncidentOutbox, build_event, registry_version
+        outbox = IncidentOutbox(self.settings.state_dir / "events")
+        reg = registry_version(self.settings.registry_path) if Path(self.settings.registry_path).exists() \
+            else "registry@inline"
+        by_id = {a["id"]: a for a in self.automations}
+        counts: dict[str, int] = defaultdict(int)
+        for incident_id in incident_ids:
+            incident = self.store.get_incident(incident_id)
+            if not incident or incident["is_root"] or incident["state"] not in TERMINAL_STATES:
+                counts["SKIPPED"] += 1
+                continue
+            automation = by_id.get(incident["automation_id"])
+            if automation is None:
+                counts["SKIPPED"] += 1
+                continue
+            status, errors = outbox.emit(build_event(self.store, automation, incident_id, self.settings,
+                                                     reg_version=reg, now=self.clock()))
+            counts[status] += 1
+            self.store.audit(AGENT, "outbox_emit", "AUTOMATION_INCIDENT local", status, automation=automation["id"],
+                             incident=incident_id, tool="outbox", validation="; ".join(errors)[:500],
+                             dry_run=self.settings.dry_run)
+        return dict(counts)
 
     # -------------------------------------------------------------- helpers
     def _ts(self) -> str:

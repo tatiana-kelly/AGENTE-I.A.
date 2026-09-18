@@ -34,6 +34,8 @@ DEFAULTS: dict[str, Any] = {
         "dedupe_hours": 12,
     },
     "report": {"title": "HERMES AUTOMATION HEALTH"},
+    # Ponte Hermes → SAL OS: outbox LOCAL do AUTOMATION_INCIDENT. Desligado: sem consumidor nesta fase.
+    "outbox": {"enabled": False},
 }
 
 _ENV_BOOL = {

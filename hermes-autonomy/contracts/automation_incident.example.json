@@ -1,7 +1,7 @@
 {
   "schema_version": "sal.automation-incident/1.0",
   "event_type": "AUTOMATION_INCIDENT",
-  "event_id": "sha256:3f1d2c9a7b6e5d4c3b2a1908f7e6d5c4b3a2918070f6e5d4c3b2a19080706050",
+  "event_id": "sha256:4b2fdcc41650e13a13e743b1bd9d96420a5e9a12c9ceb4c705526290bc5a3826",
   "source": "hermes-autonomy",
   "automation_id": "torre-fechar-dia",
   "automation_name": "Torre — Fechar Dia 15h15",

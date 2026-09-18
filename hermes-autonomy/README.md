@@ -47,4 +47,6 @@ Instalado no Hermes: `python "%LOCALAPPDATA%\hermes\autonomy\app\ha.py" <comando
 [automation-registry](docs/automation-registry.md) · [agents](docs/agents.md) · [skills](docs/skills.md) ·
 [memory](docs/memory.md) · [security](docs/security.md) · [recovery](docs/recovery.md) ·
 [troubleshooting](docs/troubleshooting.md) · [operations](docs/operations.md) · [auditoria 18/09](docs/audit-2026-09-18.md) ·
-[alinhamento SAL OS](docs/alignment-sal-os.md) · [hardening fase 2](docs/hardening-phase2.md) · [runtime](docs/runtime.md)
+[alinhamento SAL OS](docs/alignment-sal-os.md) · [hardening fase 2](docs/hardening-phase2.md) · [runtime](docs/runtime.md) ·
+[ponte Hermes → SAL OS](docs/integration-plan.md) · [rotação do segredo](docs/secret-rotation-plan.md) ·
+[D4](docs/decisions/D4-supabase-sal-os.md)
