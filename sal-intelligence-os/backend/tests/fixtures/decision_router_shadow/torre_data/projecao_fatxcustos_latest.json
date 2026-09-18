@@ -1,0 +1,29 @@
+{
+ "gerado_em": "2026-09-17T10:19:59",
+ "report_date": "2026-09-16",
+ "alertas_executivos": [
+  {
+   "base": "TEO",
+   "cidade": "TEOFILO OTONI",
+   "prioridade": "P2",
+   "score": 53,
+   "titulo": "⚠ PROJECAO DE CAPACIDADE — TEO",
+   "texto": "TEO (Teofilo Otoni) projeta 16.02% de aceleracao e 300.306 kg no fechamento. Rotas a observar: AMB→ATO. Status: CAPTAR/CONSOLIDAR ANTES DE AUMENTAR VEICULO.",
+   "restricao": "Nao alterar veiculo ate validar ocupacao historica, frequencia e custo incremental."
+  }
+ ],
+ "bases": [
+  {
+   "base": "TEO",
+   "cidade": "TEOFILO OTONI",
+   "aceleracao_pct": 16.02,
+   "variacao_pct": 8.57,
+   "classificacao": "CRESCIMENTO FORTE",
+   "prioridade": "P2",
+   "score": 53,
+   "orquestrador": {
+    "decisao_recomendada": "CAPTAR/CONSOLIDAR ANTES DE AUMENTAR VEICULO"
+   }
+  }
+ ]
+}

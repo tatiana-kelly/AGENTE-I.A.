@@ -1,0 +1,293 @@
+{
+  "_about": "15 fixtures da especificação do Case Router (seção K / pacote de dependências). Valores monetários e percentuais são ilustrativos; os limites aplicados vêm da política com origem citada. gate_trace esperado é uma subsequência: resolved/blocked comparados exatamente; pass/skipped equivalentes (não resolveu).",
+  "policy_overrides": {
+    "margem-bruta": {
+      "target": 36.0,
+      "warning": 33.0,
+      "critical": 30.0,
+      "materiality_min": 200000.0,
+      "source": "fixture-metric-definition",
+      "rule_ref": "MetricDefinition margem-bruta (valores da fixture; seed real é mock)"
+    }
+  },
+  "cases": [
+    {
+      "id": "F01",
+      "caso": "Divergência SSW×BI conhecida, sem mudança",
+      "envelope": {
+        "alert": {"metric_id": "divergencia-custo-rota-ssw-bi", "title": "Custo rota AMC -> AMB SSW×BI", "period": "2026-09-17", "current_value": 18400, "reference_value": 17200, "materiality": 1200, "severity": "low", "source_quality": "real", "concentration": [{"dimension": "rota", "value": "AMC -> AMB", "share_pct": 100}]},
+        "engine_source": "torre.divergencia_rota_ssw_bi", "entity_type": "rota", "entity_id": "AMC -> AMB",
+        "evaluated_at": "2026-09-17T10:05:00Z", "rules_version": "rv-test-1"
+      },
+      "state": {
+        "memory": {"engine_source": "torre.divergencia_rota_ssw_bi", "direction": "up", "delta": 1150, "magnitude_band": "MISSING", "status": "ABERTA", "causa": "rateio por peso no BI", "source_ref": "Torre data/aprendizado_agentes.json estado_atual['AMC -> AMB']"}
+      },
+      "expected": {
+        "route": "NO_AGENT",
+        "gate_trace": [{"gate": "quality", "result": "pass"}, {"gate": "rule", "result": "pass"}, {"gate": "memory", "result": "resolved"}],
+        "deterministic_resolution": {"resolved_by": "memory", "outcome": "known_no_change", "rule_ref": "aprendizado_diario_agentes.TOLERANCIA_MUDANCA_PCT=15"},
+        "estimated_ai_calls": 0, "requires_human_approval": false,
+        "next_step": {"action": "close_case", "owner_system": "sal-os"}
+      }
+    },
+    {
+      "id": "F02",
+      "caso": "Falso positivo marcado pela equipe",
+      "envelope": {
+        "alert": {"metric_id": "divergencia-custo-rota-ssw-bi", "title": "Custo rota AMC -> AMB SSW×BI", "period": "2026-09-18", "current_value": 18300, "reference_value": 17200, "materiality": 1100, "severity": "low", "source_quality": "real", "concentration": [{"dimension": "rota", "value": "AMC -> AMB", "share_pct": 100}]},
+        "engine_source": "torre.divergencia_rota_ssw_bi", "entity_type": "rota", "entity_id": "AMC -> AMB",
+        "evaluated_at": "2026-09-18T10:05:00Z", "rules_version": "rv-test-1"
+      },
+      "state": {
+        "memory": {"engine_source": "torre.divergencia_rota_ssw_bi", "direction": "up", "delta": 1150, "magnitude_band": "MISSING", "status": "ABERTA", "false_positive_active": true, "false_positive_reason": "manifesto de retorno contado duas vezes no BI", "source_ref": "Torre data/aprendizado_agentes.json falsos_positivos['AMC -> AMB']"}
+      },
+      "expected": {
+        "route": "NO_AGENT",
+        "gate_trace": [{"gate": "quality", "result": "pass"}, {"gate": "rule", "result": "pass"}, {"gate": "memory", "result": "resolved"}],
+        "deterministic_resolution": {"resolved_by": "memory", "outcome": "false_positive", "rule_ref": "pattern_stats.false_positive_active"},
+        "estimated_ai_calls": 0, "requires_human_approval": false
+      }
+    },
+    {
+      "id": "F03",
+      "caso": "Ocupação baixa em um dia isolado",
+      "envelope": {
+        "alert": {"metric_id": "ocupacao-transferencia", "title": "Ocupação BAIXA rota FIXA", "period": "2026-09-16", "current_value": 42, "reference_value": 70, "materiality": 0, "severity": "medium", "source_quality": "real", "concentration": [{"dimension": "rota", "value": "BHE -> VGE", "share_pct": 100}]},
+        "engine_source": "torre.investigador_transferencias", "entity_type": "rota", "entity_id": "BHE -> VGE",
+        "evaluated_at": "2026-09-16T12:00:00Z", "rules_version": "rv-test-1",
+        "signals": {"single_day": true, "window_class": "ALTA"}
+      },
+      "state": {},
+      "expected": {
+        "route": "NO_AGENT",
+        "gate_trace": [{"gate": "quality", "result": "pass"}, {"gate": "rule", "result": "resolved"}],
+        "deterministic_resolution": {"resolved_by": "rule", "outcome": "monitor", "rule_ref": "config_investigador.janela_principal_dias_uteis=5"},
+        "estimated_ai_calls": 0
+      }
+    },
+    {
+      "id": "F04",
+      "caso": "Dados ruins bloqueiam (DRE mock)",
+      "envelope": {
+        "alert": {"metric_id": "margem-bruta", "title": "Margem bruta abaixo do crítico", "period": "2026-07", "current_value": 30.0, "reference_value": 36.0, "materiality": 440000, "severity": "critical", "source_quality": "mock", "concentration": [{"dimension": "linha", "value": "Premium", "share_pct": 62}]},
+        "engine_source": "sal-os.dre", "entity_type": "empresa", "entity_id": "SAL",
+        "evaluated_at": "2026-08-05T09:00:00Z", "rules_version": "rv-test-1"
+      },
+      "state": {},
+      "expected": {
+        "route": "NO_AGENT", "status": "BLOCKED_DATA",
+        "gate_trace": [{"gate": "quality", "result": "blocked"}],
+        "trace_exact_gates": ["quality"],
+        "quality_passed": false,
+        "deterministic_resolution": {"resolved_by": "quality_gate", "outcome": "data_insufficient", "rule_ref": "priority-scoring.gates.minimum_data_quality=60"},
+        "estimated_ai_calls": 0,
+        "next_step": {"action": "collect_evidence", "owner_system": "human", "missing_evidence": ["DRE real por filial/linha"]}
+      }
+    },
+    {
+      "id": "F05",
+      "caso": "Queda de margem DRE sem caso anterior",
+      "envelope": {
+        "alert": {"metric_id": "margem-bruta", "title": "Margem bruta abaixo do crítico", "period": "2026-07", "current_value": 30.0, "reference_value": 36.0, "materiality": 440000, "severity": "critical", "source_quality": "real", "concentration": [{"dimension": "linha", "value": "Premium", "share_pct": 62}, {"dimension": "regiao", "value": "Sul", "share_pct": 54}]},
+        "engine_source": "sal-os.dre", "entity_type": "empresa", "entity_id": "SAL",
+        "evaluated_at": "2026-08-05T09:00:00Z", "rules_version": "rv-test-1"
+      },
+      "state": {},
+      "expected": {
+        "route": "MULTI_AGENT",
+        "gate_trace": [{"gate": "quality", "result": "pass"}, {"gate": "rule", "result": "pass"}, {"gate": "memory", "result": "skipped"}, {"gate": "similar", "result": "pass"}, {"gate": "decision", "result": "skipped"}, {"gate": "learning", "result": "skipped"}, {"gate": "playbook", "result": "skipped"}, {"gate": "ai", "result": "resolved"}],
+        "selected_agents": ["investigador", "financeiro-dre", "custos-orcamento-roi", "provocador"],
+        "estimated_ai_calls": 5,
+        "cost": {"usd": null, "basis": "unknown"}
+      }
+    },
+    {
+      "id": "F06",
+      "caso": "Reutiliza decisão validada",
+      "envelope": {
+        "alert": {"metric_id": "margem-bruta", "title": "Margem bruta abaixo do crítico", "period": "2026-08", "current_value": 29.6, "reference_value": 36.0, "materiality": 410000, "severity": "critical", "source_quality": "real", "concentration": [{"dimension": "linha", "value": "Premium", "share_pct": 60}]},
+        "engine_source": "sal-os.dre", "entity_type": "empresa", "entity_id": "SAL",
+        "evaluated_at": "2026-09-05T09:00:00Z", "rules_version": "rv-test-1"
+      },
+      "state": {
+        "reference": {"case_id": "case-2026-07-margem", "period": "2026-07", "evaluated_at": "2026-08-05T09:00:00Z", "engine_source": "sal-os.dre", "direction": "down", "magnitude_band": "CRITICO", "dominant_dimension": "linha", "rules_version": "rv-test-1", "reopen_count": 0,
+          "diagnosis": {"confidence": 78, "decision_status": "READY_FOR_DECISION", "hypothesis_statuses": ["confirmed", "confirmed"]},
+          "decision": {"decision_id": "dec-2026-07-margem", "outcome": "approved"},
+          "action": {"action_execution_id": "act-2026-07-margem", "outcome": "ok", "recurrence": false},
+          "learning": {"learning_id": "learn-2026-07-margem", "predicted_impact": 300000, "actual_impact": 320000}}
+      },
+      "expected": {
+        "route": "REUSE_DECISION",
+        "gate_trace": [{"gate": "quality", "result": "pass"}, {"gate": "rule", "result": "pass"}, {"gate": "memory", "result": "pass"}, {"gate": "similar", "result": "pass"}, {"gate": "decision", "result": "resolved"}, {"gate": "learning", "result": "pass"}],
+        "reused_decision_id": "dec-2026-07-margem", "reused_learning_id": "learn-2026-07-margem",
+        "similarity_reference": {"match_level": "similar", "material_change": false},
+        "estimated_ai_calls": 0, "requires_human_approval": true,
+        "next_step": {"action": "propose_decision", "owner_system": "human"}
+      }
+    },
+    {
+      "id": "F07",
+      "caso": "Mudança material: concentração migrou",
+      "envelope": {
+        "alert": {"metric_id": "margem-bruta", "title": "Margem bruta abaixo do crítico", "period": "2026-08", "current_value": 29.8, "reference_value": 36.0, "materiality": 420000, "severity": "critical", "source_quality": "real", "concentration": [{"dimension": "regiao", "value": "Sul", "share_pct": 58}]},
+        "engine_source": "sal-os.dre", "entity_type": "empresa", "entity_id": "SAL",
+        "evaluated_at": "2026-09-05T09:00:00Z", "rules_version": "rv-test-1"
+      },
+      "state": {
+        "reference": {"case_id": "case-2026-07-margem", "period": "2026-07", "evaluated_at": "2026-08-05T09:00:00Z", "engine_source": "sal-os.dre", "direction": "down", "magnitude_band": "CRITICO", "dominant_dimension": "linha", "rules_version": "rv-test-1", "reopen_count": 0,
+          "diagnosis": {"confidence": 78, "decision_status": "READY_FOR_DECISION", "hypothesis_statuses": ["confirmed", "confirmed"]},
+          "decision": {"decision_id": "dec-2026-07-margem", "outcome": "approved"},
+          "action": {"action_execution_id": "act-2026-07-margem", "outcome": "ok", "recurrence": false},
+          "learning": {"learning_id": "learn-2026-07-margem", "predicted_impact": 300000, "actual_impact": 320000}}
+      },
+      "expected": {
+        "route": "MULTI_AGENT",
+        "gate_trace": [{"gate": "similar", "result": "pass"}, {"gate": "decision", "result": "blocked"}, {"gate": "ai", "result": "resolved"}],
+        "similarity_reference": {"match_level": "similar", "material_change": true, "material_change_reason": "dominant_dimension"},
+        "reused_decision_id": null, "estimated_ai_calls": 5
+      }
+    },
+    {
+      "id": "F08",
+      "caso": "Decisão anterior inválida: aprendizado negativo",
+      "envelope": {
+        "alert": {"metric_id": "margem-bruta", "title": "Margem bruta abaixo do crítico", "period": "2026-08", "current_value": 29.6, "reference_value": 36.0, "materiality": 410000, "severity": "critical", "source_quality": "real", "concentration": [{"dimension": "linha", "value": "Premium", "share_pct": 60}]},
+        "engine_source": "sal-os.dre", "entity_type": "empresa", "entity_id": "SAL",
+        "evaluated_at": "2026-09-05T09:00:00Z", "rules_version": "rv-test-1"
+      },
+      "state": {
+        "reference": {"case_id": "case-2026-07-margem", "period": "2026-07", "evaluated_at": "2026-08-05T09:00:00Z", "engine_source": "sal-os.dre", "direction": "down", "magnitude_band": "CRITICO", "dominant_dimension": "linha", "rules_version": "rv-test-1", "reopen_count": 0,
+          "diagnosis": {"confidence": 78, "decision_status": "READY_FOR_DECISION", "hypothesis_statuses": ["confirmed", "confirmed"]},
+          "decision": {"decision_id": "dec-2026-07-margem", "outcome": "approved"},
+          "action": {"action_execution_id": "act-2026-07-margem", "outcome": "fail", "recurrence": true},
+          "learning": {"learning_id": "learn-2026-07-margem", "predicted_impact": 300000, "actual_impact": 90000}},
+        "pattern_stats": {"decisions_approved": 1, "verified_fail": 1, "reuse_verified_fail": 1, "reuse_blocked": true, "reuse_blocked_reason": "ação de 2026-07 falhou com recorrência"}
+      },
+      "expected": {
+        "route": "MULTI_AGENT",
+        "gate_trace": [{"gate": "decision", "result": "blocked"}, {"gate": "learning", "result": "blocked"}, {"gate": "playbook", "result": "skipped"}, {"gate": "ai", "result": "resolved"}],
+        "reused_decision_id": null,
+        "selected_agents_must_include": ["investigador", "provocador"],
+        "requires_human_approval": true
+      }
+    },
+    {
+      "id": "F09",
+      "caso": "Playbook ativo resolve sem IA",
+      "envelope": {
+        "alert": {"metric_id": "ocupacao-transferencia", "title": "Ocupação BAIXA persistente 5 dias úteis", "period": "2026-09-12..2026-09-18", "current_value": 44, "reference_value": 70, "materiality": 0, "severity": "high", "source_quality": "real", "concentration": [{"dimension": "rota", "value": "BHE -> VGE", "share_pct": 100}]},
+        "engine_source": "torre.investigador_transferencias", "entity_type": "rota", "entity_id": "BHE -> VGE",
+        "evaluated_at": "2026-09-19T08:00:00Z", "rules_version": "rv-test-1",
+        "signals": {"single_day": false, "window_class": "BAIXA"}
+      },
+      "state": {
+        "pattern_stats": {"decisions_approved": 3, "verified_ok": 2, "verified_fail": 0, "reopen_total": 0},
+        "playbook": {"playbook_id": "pb-ocupacao-baixa-bhe-vge", "version": 1, "status": "active", "rules_version": "rv-test-1", "valid_from": "2026-09-01T00:00:00Z", "valid_until": "2026-12-31T00:00:00Z"}
+      },
+      "expected": {
+        "route": "NO_AGENT",
+        "gate_trace": [{"gate": "rule", "result": "pass"}, {"gate": "similar", "result": "pass"}, {"gate": "decision", "result": "pass"}, {"gate": "learning", "result": "pass"}, {"gate": "playbook", "result": "resolved"}],
+        "deterministic_resolution": {"resolved_by": "playbook", "outcome": "playbook_applied"},
+        "playbook_id": "pb-ocupacao-baixa-bhe-vge", "estimated_ai_calls": 0, "requires_human_approval": true,
+        "next_step": {"action": "propose_decision", "owner_system": "human"}
+      }
+    },
+    {
+      "id": "F10",
+      "caso": "Um agente confirma hipótese herdada após mudança de faixa",
+      "envelope": {
+        "alert": {"metric_id": "ocupacao-transferencia", "title": "Ocupação caiu de MODERADA para BAIXA", "period": "2026-09-12..2026-09-18", "current_value": 47, "reference_value": 70, "materiality": 0, "severity": "high", "source_quality": "real", "concentration": [{"dimension": "rota", "value": "DIE -> BHE", "share_pct": 100}]},
+        "engine_source": "torre.investigador_transferencias", "entity_type": "rota", "entity_id": "DIE -> BHE",
+        "evaluated_at": "2026-09-19T08:00:00Z", "rules_version": "rv-test-1",
+        "signals": {"single_day": false, "window_class": "BAIXA"}
+      },
+      "state": {
+        "reference": {"case_id": "case-2026-09-05-die-bhe", "period": "2026-09-01..2026-09-05", "evaluated_at": "2026-09-06T08:00:00Z", "engine_source": "torre.investigador_transferencias", "direction": "down", "magnitude_band": "MODERADA", "dominant_dimension": "rota", "rules_version": "rv-test-1", "reopen_count": 0,
+          "diagnosis": {"confidence": 72, "decision_status": "READY_FOR_DECISION", "hypothesis_statuses": ["confirmed"]}}
+      },
+      "expected": {
+        "route": "ONE_AGENT",
+        "gate_trace": [{"gate": "similar", "result": "pass"}, {"gate": "decision", "result": "blocked"}, {"gate": "ai", "result": "resolved"}],
+        "selected_agents": ["transferencia"],
+        "estimated_ai_calls": 2,
+        "similarity_reference": {"material_change": true, "material_change_reason": "magnitude_band"}
+      }
+    },
+    {
+      "id": "F11",
+      "caso": "Investigar antes: custo×performance com cobertura parcial",
+      "envelope": {
+        "alert": {"metric_id": "custo-por-cte-base", "title": "Custo por CT-e BHE acima da referência", "period": "2026-09", "current_value": 24.10, "reference_value": 22.00, "materiality": 0, "severity": "medium", "source_quality": "partial", "concentration": [{"dimension": "base", "value": "BHE", "share_pct": 100}]},
+        "engine_source": "torre.motor_snapshot_painel", "entity_type": "base", "entity_id": "BHE",
+        "evaluated_at": "2026-09-17T16:00:00Z", "rules_version": "rv-test-1",
+        "signals": {"coverage_scope": "custo_performance", "coverage_pct": 71}
+      },
+      "state": {},
+      "expected": {
+        "route": "INVESTIGATE_FIRST",
+        "gate_trace": [{"gate": "quality", "result": "pass"}, {"gate": "rule", "result": "blocked"}, {"gate": "ai", "result": "resolved"}],
+        "selected_agents": [], "estimated_ai_calls": 0, "requires_human_approval": false,
+        "next_step": {"action": "collect_evidence", "owner_system": "torre-engine", "missing_evidence": ["KPI de performance por base BHE completo"], "evidence_sources": ["motor_snapshot_painel.py (bloco custo×performance)"]}
+      }
+    },
+    {
+      "id": "F12",
+      "caso": "case_type UNKNOWN: não escolher especialista",
+      "envelope": {
+        "alert": {"metric_id": "projecao-faturamento-custos-base", "title": "Base com queda de faturamento e custo crescente", "period": "2026-09", "current_value": -16, "reference_value": 0, "materiality": 0, "severity": "high", "source_quality": "real", "concentration": [{"dimension": "base", "value": "VGE", "share_pct": 100}]},
+        "engine_source": "torre.orquestrador_projecao", "entity_type": "base", "entity_id": "VGE",
+        "evaluated_at": "2026-09-17T16:00:00Z", "rules_version": "rv-test-1"
+      },
+      "state": {},
+      "expected": {
+        "route": "INVESTIGATE_FIRST",
+        "gate_trace": [{"gate": "quality", "result": "pass"}, {"gate": "rule", "result": "pass"}, {"gate": "ai", "result": "blocked"}],
+        "selected_agents": [], "estimated_ai_calls": 0,
+        "next_step": {"action": "await_human", "owner_system": "human", "missing_evidence": ["classificação do case_type da métrica"]}
+      }
+    },
+    {
+      "id": "F13",
+      "caso": "Cliente deficitário com reajuste contratual (aprovação humana)",
+      "envelope": {
+        "alert": {"metric_id": "clientes-deficitarios", "title": "Agendamento dedicado com custo > faturamento", "period": "60 dias", "current_value": 20, "reference_value": 5, "materiality": 7400, "severity": "high", "source_quality": "real", "concentration": [{"dimension": "cliente_pagador", "value": "CLIENTE-X", "share_pct": 100}]},
+        "engine_source": "torre.clientes_deficitarios", "entity_type": "cliente_pagador", "entity_id": "CLIENTE-X",
+        "evaluated_at": "2026-09-17T16:00:00Z", "rules_version": "rv-test-1"
+      },
+      "state": {},
+      "expected": {
+        "route": "MULTI_AGENT",
+        "gate_trace": [{"gate": "rule", "result": "pass"}, {"gate": "similar", "result": "pass"}, {"gate": "ai", "result": "resolved"}],
+        "selected_agents": ["investigador", "comercial-faturamento", "provocador"],
+        "priority": {"human_approval_required": true, "triggered_gates": ["material_contract_or_payment"]},
+        "requires_human_approval": true, "estimated_ai_calls": 4
+      }
+    },
+    {
+      "id": "F14",
+      "caso": "Mesmo alerta reenviado (idempotência)",
+      "replay_of": "F05",
+      "expected": {"same_route_as_original": true, "evaluations": 1, "replays": 1, "route": "MULTI_AGENT"}
+    },
+    {
+      "id": "F15",
+      "caso": "Terceira reabertura → escalonamento",
+      "envelope": {
+        "alert": {"metric_id": "ocupacao-transferencia", "title": "Ocupação BAIXA voltou após ação", "period": "2026-10-03..2026-10-09", "current_value": 41, "reference_value": 70, "materiality": 0, "severity": "high", "source_quality": "real", "concentration": [{"dimension": "rota", "value": "BHE -> VGE", "share_pct": 100}]},
+        "engine_source": "torre.investigador_transferencias", "entity_type": "rota", "entity_id": "BHE -> VGE",
+        "evaluated_at": "2026-10-10T08:00:00Z", "rules_version": "rv-test-1",
+        "signals": {"single_day": false, "window_class": "BAIXA"},
+        "loop": {"hop": 0, "reopen_count": 2, "is_reopen": true}
+      },
+      "state": {},
+      "expected": {
+        "status": "ESCALATED", "route": "INVESTIGATE_FIRST",
+        "trace_exact_gates": ["loop_guard"],
+        "reused_decision_id": null, "playbook_id": null, "selected_agents": [],
+        "loop_guard": {"reopen_count": 3, "max_reopen": 2},
+        "requires_human_approval": true,
+        "next_step": {"action": "await_human", "owner_system": "human"}
+      }
+    }
+  ]
+}

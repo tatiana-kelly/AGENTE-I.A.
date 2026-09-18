@@ -1,0 +1,94 @@
+{
+ "gerado_em": "2026-09-17T10:07:31",
+ "periodo": {
+  "ano": 2026,
+  "mes": 9,
+  "data_inicio": "2026-09-01",
+  "data_fim": "2026-09-15",
+  "data_referencia": "2026-09-17",
+  "data_referencia_d1": "2026-09-16",
+  "data_referencia_d2": "2026-09-16",
+  "ultimo_dia_fechado": "2026-09-15",
+  "dias_totais": 15,
+  "dias_uteis": 10,
+  "dias_uteis_analisados": 10,
+  "regra_temporal": "D-1 UTIL (dias futuros excluidos automaticamente) + corte de cauda incompleta: o periodo recua ate o ultimo dia em que os BIs de coleta e entrega realmente fecharam",
+  "dias_removidos_incompletos": []
+ },
+ "diagnosticos_operacionais": {
+  "custo_performance": {
+   "status": "ok",
+   "n": 4,
+   "dados": [
+    {
+     "sigla": "VIT",
+     "custo": 79159.77,
+     "qtd_ctes": 1564,
+     "custo_cte": 50.61,
+     "custo_kg": 0.6719,
+     "peso_total": 117813.81,
+     "custo_cte_mes_ant": 50.25,
+     "delta_custo_pct": 0.72,
+     "kpi_performance": 88.59,
+     "delta_perf_pp": -6.41,
+     "alerta_cte_ref": 25.0,
+     "acima_alerta_cte": true,
+     "categoria": "D",
+     "hipotese": "INVESTIGAR EXECUCAO",
+     "descricao": "Performance caiu sem aumento de custo. Investigar problema de execucao isolado."
+    },
+    {
+     "sigla": "VGE",
+     "custo": 106700.03,
+     "qtd_ctes": 3315,
+     "custo_cte": 32.19,
+     "custo_kg": 0.7913,
+     "peso_total": 134834.35,
+     "custo_cte_mes_ant": 30.04,
+     "delta_custo_pct": 7.14,
+     "kpi_performance": 0,
+     "delta_perf_pp": 0,
+     "alerta_cte_ref": 22.0,
+     "acima_alerta_cte": true,
+     "categoria": "B",
+     "hipotese": "INVESTIGAR DILUICAO / VOLUME",
+     "descricao": "Custo subiu com performance estavel. Possivel diluicao de custo fixo por queda de volume."
+    },
+    {
+     "sigla": "APM",
+     "custo": 37427.62,
+     "qtd_ctes": 1575,
+     "custo_cte": 23.76,
+     "custo_kg": 0.4151,
+     "peso_total": 90158.52,
+     "custo_cte_mes_ant": 25.51,
+     "delta_custo_pct": -6.86,
+     "kpi_performance": 0,
+     "delta_perf_pp": 0,
+     "alerta_cte_ref": 25.0,
+     "acima_alerta_cte": false,
+     "categoria": "OK",
+     "hipotese": "SEM ALERTA",
+     "descricao": "Sem alertas relevantes de custo ou performance."
+    },
+    {
+     "sigla": "BHE",
+     "custo": 225346.36,
+     "qtd_ctes": 6505,
+     "custo_cte": 34.64,
+     "custo_kg": 0.5975,
+     "peso_total": 377165.71,
+     "custo_cte_mes_ant": 35.76,
+     "delta_custo_pct": -3.13,
+     "kpi_performance": 0,
+     "delta_perf_pp": 0,
+     "alerta_cte_ref": 22.0,
+     "acima_alerta_cte": true,
+     "categoria": "OK",
+     "hipotese": "SEM ALERTA",
+     "descricao": "Sem alertas relevantes de custo ou performance."
+    }
+   ]
+  }
+ }
+}

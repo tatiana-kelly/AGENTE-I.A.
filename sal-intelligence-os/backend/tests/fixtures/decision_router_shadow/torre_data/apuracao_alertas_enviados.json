@@ -1,0 +1,19 @@
+{
+ "alertas": {
+  "2026-08-19": {
+   "em": "2026-08-21T12:53:05",
+   "delta_total": 214132.45,
+   "motivo": "SUPRIMIDO a pedido dela em 21/08/2026: causa ja identificada (dia 19/08 incompleto na Torre, nao erro do card) e conserto em andamento. Alertas valem a partir de 22/08/2026."
+  },
+  "2026-09-11": {
+   "em": "2026-09-15T10:11:36",
+   "delta_total": -70493.81,
+   "motivo": "enviado"
+  },
+  "2026-09-15": {
+   "em": "2026-09-17T10:19:51",
+   "delta_total": 16134.53,
+   "motivo": "enviado"
+  }
+ }
+}

@@ -1,0 +1,86 @@
+{
+ "gerado_em": "2026-09-17T10:20:04",
+ "dia_foco": "2026-09-17",
+ "cobertura_frete_pct": 83.1,
+ "cobertura_custo_pct": 83.1,
+ "validacoes_humanas": {
+  "total": 0,
+  "aceitas": 0,
+  "recusadas": 0,
+  "ajustadas": 0
+ },
+ "rotas": [
+  {
+   "rota": "CARIACICA→VARGINHA",
+   "tipo_perna": "RETORNO",
+   "ocupacao": "BAIXA",
+   "ocupacao_peso": 17.6,
+   "gap_faturamento": 11145.9,
+   "score": 78.4,
+   "prioridade": "P1",
+   "confianca": "BAIXA",
+   "status": "AGUARDANDO_VALIDACAO_HUMANA",
+   "periodo_analisado": {
+    "dia_foco": "2026-09-17",
+    "janela_5du": {
+     "dias": 1,
+     "frete": 21687.7,
+     "custo": 5745.88,
+     "pct": 26.49,
+     "ocup": 17.6,
+     "peso": 8464.0,
+     "frete_dia": 21687.7,
+     "custo_dia": 5745.88
+    }
+   }
+  },
+  {
+   "rota": "CONTAGEM→GOVERNADOR VALADARES",
+   "tipo_perna": "IDA",
+   "ocupacao": "MODERADA",
+   "ocupacao_peso": 50.3,
+   "gap_faturamento": 0,
+   "score": 38.3,
+   "prioridade": "P3",
+   "confianca": "ALTA",
+   "status": "AGUARDANDO_VALIDACAO_HUMANA",
+   "periodo_analisado": {
+    "dia_foco": "2026-09-17",
+    "janela_5du": {
+     "dias": 5,
+     "frete": 108843.62,
+     "custo": 17838.05,
+     "pct": 16.39,
+     "ocup": 50.3,
+     "peso": 44641.0,
+     "frete_dia": 21768.72,
+     "custo_dia": 3567.61
+    }
+   }
+  },
+  {
+   "rota": "MONTES CLAROS→CONTAGEM",
+   "tipo_perna": "RETORNO",
+   "ocupacao": "BAIXA",
+   "ocupacao_peso": 8.0,
+   "gap_faturamento": 81409.38,
+   "score": 79.9,
+   "prioridade": "NORMAL",
+   "confianca": "BAIXA",
+   "status": "AGUARDANDO_VALIDACAO_HUMANA",
+   "periodo_analisado": {
+    "dia_foco": "2026-09-17",
+    "janela_5du": {
+     "dias": 5,
+     "frete": 15968.11,
+     "custo": 17041.06,
+     "pct": 106.72,
+     "ocup": 8.0,
+     "peso": 10527.0,
+     "frete_dia": 3193.62,
+     "custo_dia": 3408.21
+    }
+   }
+  }
+ ]
+}

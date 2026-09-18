@@ -1,0 +1,49 @@
+{
+ "meta": {
+  "gerado_em": "2026-08-25T21:38:03",
+  "janela_pedida_dias": 61,
+  "janela_real": {
+   "de": "2026-08-01",
+   "ate": "2026-08-25",
+   "dias": 25
+  },
+  "min_recorrencia": 5
+ },
+ "deficitarios": [],
+ "quase_la": [
+  {
+   "modal": "ENTREGA",
+   "cliente_destinatario": "anon:0e1bac3923fe",
+   "cliente_pagador": "ND",
+   "agendamentos": 3,
+   "agendamentos_no_vermelho": 2,
+   "custo_medio": 228.0,
+   "faturamento_medio": 118.03,
+   "gap_medio_rs": 109.97,
+   "prejuizo_periodo_rs": 329.9,
+   "sinal": "FRACO — so 3 agendamento(s) na janela (piso e 5); confirmar quando o historico completar 60 dias",
+   "unidades": [
+    "VGE"
+   ],
+   "primeiro_dia": "2026-08-13",
+   "ultimo_dia": "2026-08-20"
+  },
+  {
+   "modal": "ENTREGA",
+   "cliente_destinatario": "anon:c6b1a6075491",
+   "cliente_pagador": "ND",
+   "agendamentos": 2,
+   "agendamentos_no_vermelho": 2,
+   "custo_medio": 240.0,
+   "faturamento_medio": 197.66,
+   "gap_medio_rs": 42.34,
+   "prejuizo_periodo_rs": 84.69,
+   "sinal": "FRACO — so 2 agendamento(s) na janela (piso e 5); confirmar quando o historico completar 60 dias",
+   "unidades": [
+    "VIT"
+   ],
+   "primeiro_dia": "2026-08-04",
+   "ultimo_dia": "2026-08-06"
+  }
+ ]
+}

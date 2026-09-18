@@ -1,0 +1,83 @@
+{
+ "gerado_em": "2026-09-17T14:03:08",
+ "indicador": "TRANSFERENCIA",
+ "escopo": "MICRO",
+ "limiares": {
+  "min_abs": 500.0,
+  "min_pct": 5.0,
+  "_nota": "so pontua quando estoura os DOIS criterios"
+ },
+ "rotas_divergentes": [
+  {
+   "rota": "URL -> ACW",
+   "oficial_ssw": 26014.27,
+   "bi": 5659.82,
+   "delta": 20354.45,
+   "delta_pct": 359.63,
+   "sentido": "BI SUBESTIMA",
+   "n_ctrbs": 9,
+   "principais_ctrbs": [
+    {
+     "ctrb": "AMP009331-9",
+     "data": "2026-08-13",
+     "manifestos": [
+      "URL000991-1"
+     ],
+     "oficial": 8439.23,
+     "bi": 128.65,
+     "delta": 8310.58
+    }
+   ]
+  },
+  {
+   "rota": "AJF -> AMP",
+   "oficial_ssw": 58456.45,
+   "bi": 67370.88,
+   "delta": -8914.43,
+   "delta_pct": -13.23,
+   "sentido": "BI SUPERESTIMA",
+   "n_ctrbs": 29,
+   "principais_ctrbs": [
+    {
+     "ctrb": "ATO000434-1",
+     "data": "2026-08-13",
+     "manifestos": [
+      "AJF001405-2"
+     ],
+     "oficial": 48.0,
+     "bi": 2324.12,
+     "delta": -2276.12
+    }
+   ]
+  },
+  {
+   "rota": "AMP -> SPL",
+   "oficial_ssw": 9207.69,
+   "bi": 1771.84,
+   "delta": 7435.85,
+   "delta_pct": 419.67,
+   "sentido": "BI SUBESTIMA",
+   "n_ctrbs": 21,
+   "principais_ctrbs": [
+    {
+     "ctrb": "AMC000535-5",
+     "data": "2026-08-10",
+     "manifestos": [
+      "AMP011965-2"
+     ],
+     "oficial": 3031.41,
+     "bi": 90.01,
+     "delta": 2941.4
+    }
+   ]
+  }
+ ],
+ "resumo": {
+  "houve_divergencia": true,
+  "n_rotas": 11,
+  "delta_total": 37200.89,
+  "soma_oficial_das_rotas": 230147.25,
+  "delta_liquido_pct": 16.16,
+  "afeta_macro": false
+ }
+}

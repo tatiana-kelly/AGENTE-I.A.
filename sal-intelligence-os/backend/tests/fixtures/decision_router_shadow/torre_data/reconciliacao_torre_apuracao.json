@@ -1,0 +1,92 @@
+{
+ "gerado_em": "2026-09-17T14:03:08",
+ "periodo_torre": {
+  "inicio": "2026-09-01",
+  "fim": "2026-09-15",
+  "dias_uteis": 10
+ },
+ "periodo_apuracao": {
+  "inicio": "2026-08-01",
+  "fim": "2026-08-24"
+ },
+ "mesmo_periodo": false,
+ "linhas": [
+  {
+   "categoria": "Transferências",
+   "campo": "transferencia",
+   "torre": 1512177.45,
+   "apuracao": 2277223.83,
+   "delta": -765046.38,
+   "delta_pct": -33.6,
+   "fonte_na_torre": "CTRB oficial (073)",
+   "classificacao": "INVESTIGAR",
+   "causa": "não se explica por fonte nem por janela — exige apuração humana"
+  },
+  {
+   "categoria": "Entregas Filiais",
+   "campo": "entrega_filiais",
+   "torre": 1213664.85,
+   "apuracao": 1944887.08,
+   "delta": -731222.23,
+   "delta_pct": -37.6,
+   "fonte_na_torre": "BI",
+   "classificacao": "FONTE_DIFERENTE",
+   "causa": "a Torre usa o BI nesta categoria e a apuração usa a régua oficial; é o gap conhecido do BI (mesma família que a transferência tinha antes da regra CTRB), não erro da Torre"
+  },
+  {
+   "categoria": "Entregas Parceiros",
+   "campo": "entrega_parceiros",
+   "torre": 816455.57,
+   "apuracao": 1308478.29,
+   "delta": -492022.72,
+   "delta_pct": -37.6,
+   "fonte_na_torre": "Motor Parceiros",
+   "classificacao": "INVESTIGAR",
+   "causa": "não se explica por fonte nem por janela — exige apuração humana"
+  },
+  {
+   "categoria": "Coletas",
+   "campo": "coleta",
+   "torre": 720214.01,
+   "apuracao": 1062871.7,
+   "delta": -342657.69,
+   "delta_pct": -32.24,
+   "fonte_na_torre": "BI",
+   "classificacao": "FONTE_DIFERENTE",
+   "causa": "a Torre usa o BI nesta categoria e a apuração usa a régua oficial; é o gap conhecido do BI (mesma família que a transferência tinha antes da regra CTRB), não erro da Torre"
+  },
+  {
+   "categoria": "Coletas + Parceiros",
+   "campo": "coleta_parceiros",
+   "torre": 2493.6,
+   "apuracao": 3326.64,
+   "delta": -833.04,
+   "delta_pct": -25.04,
+   "fonte_na_torre": "BI",
+   "classificacao": "OK",
+   "causa": "dentro do ruído de arredondamento/corte de hora"
+  },
+  {
+   "categoria": "TOTAL",
+   "campo": "total",
+   "torre": 4265005.48,
+   "apuracao": 6596787.54,
+   "delta": -2331782.06,
+   "delta_pct": -35.35,
+   "fonte_na_torre": "soma das categorias",
+   "classificacao": "SOMA",
+   "causa": "resultado das diferenças das categorias acima — ver cada linha"
+  },
+  {
+   "categoria": "Faturamento",
+   "campo": "faturamento",
+   "torre": 7033872.62,
+   "apuracao": 11088799.04,
+   "delta": -4054926.42,
+   "delta_pct": -36.57,
+   "fonte_na_torre": "BI",
+   "classificacao": "FONTE_DIFERENTE",
+   "causa": "a Torre usa o BI nesta categoria e a apuração usa a régua oficial; é o gap conhecido do BI (mesma família que a transferência tinha antes da regra CTRB), não erro da Torre"
+  }
+ ]
+}

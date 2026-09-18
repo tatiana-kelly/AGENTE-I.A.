@@ -1,0 +1,36 @@
+{
+ "estado_atual": {
+  "AJF -> AMP": {
+   "primeira_vez": "2026-08-21",
+   "ultima_vez": "2026-09-17",
+   "vezes": 127,
+   "delta": -8914.43,
+   "delta_pct": -20.2,
+   "sentido": "BI SUPERESTIMA",
+   "status": "ABERTA",
+   "causa": null
+  },
+  "AMP -> SPL": {
+   "primeira_vez": "2026-08-21",
+   "ultima_vez": "2026-09-17",
+   "vezes": 127,
+   "delta": 7435.85,
+   "delta_pct": 604.48,
+   "sentido": "BI SUBESTIMA",
+   "status": "ABERTA",
+   "causa": null
+  },
+  "URL -> ACW": {
+   "primeira_vez": "2026-09-02",
+   "ultima_vez": "2026-09-17",
+   "vezes": 90,
+   "delta": 20354.45,
+   "delta_pct": 518.93,
+   "sentido": "BI SUBESTIMA",
+   "status": "ABERTA",
+   "causa": null
+  }
+ },
+ "falsos_positivos": {},
+ "atualizado_em": "2026-09-17T14:03:08"
+}

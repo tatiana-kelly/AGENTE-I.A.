@@ -1,0 +1,29 @@
+{
+ "_regra": "Parametros da PROJECAO FATURAMENTO x CUSTOS (FASE C, diretoria 19/08/2026). SO a diretoria altera. Thresholds da spec §7 — sugestao inicial, ajustaveis.",
+ "thresholds_crescimento_pct": {
+  "crescimento_forte": 15,
+  "crescimento": 5,
+  "estavel_min": -5,
+  "queda": -15
+ },
+ "ocupacao_cheio_pct": 85,
+ "ocupacao_moderada_min_pct": 70,
+ "janela_rotas_dias_uteis": 5,
+ "rpk_alerta_gap_pp": 5,
+ "_regra_aviso_meta_email": "Quando a meta do e-mail do BI (Joao Otavio) difere da meta oficial da Torre, a Torre pode acender um aviso. DESLIGADO por decisao da Tatiana em 31/08/2026: a divergencia e conhecida (o BI ainda usa 694.000 enquanto a Torre usa 696.000) e nao precisa virar alerta novo na tela. A Torre SEMPRE usa a meta oficial dela; o campo meta_divergente continua gravado no JSON para auditoria. Religar (true) quando o BI atualizar a meta, para voltar a pegar divergencia nova.",
+ "avisar_meta_email_divergente": false,
+ "score": {
+  "financeiro_max_pontos": 30,
+  "financeiro_escala_rs": 100000,
+  "operacional_max_pontos": 20,
+  "persistencia_max_pontos": 20,
+  "crescimento_max_pontos": 15,
+  "evidencia_max_pontos": 10,
+  "confianca_agentes_max_pontos": 5
+ },
+ "niveis": {"P0": [80, 100], "P1": [60, 79], "P2": [40, 59], "P3": [20, 39], "NORMAL": [0, 19]},
+ "mapa_base_cidade_extra": {
+  "MOC": "MONTES CLAROS"
+ },
+ "_nota_mapa": "siglas_cidades.json e a fonte primaria; este mapa so cobre siglas de base do Farol ausentes la (MOC nao mapeada — validar com Nickson/Bruno)"
+}
