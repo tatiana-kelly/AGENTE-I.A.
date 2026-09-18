@@ -13,6 +13,22 @@ export interface TaskInput {
   context?: Record<string, unknown>;
   skill?: string;
   modelProfile?: ModelProfile;
+  /**
+   * Tempo limite DESTA chamada, em ms. Opcional: quando ausente, vale o timeout configurado do provider
+   * (padrão do httpClient: 30 s) — comportamento idêntico ao anterior para quem não informa (/orchestrate).
+   */
+  timeoutMs?: number;
+  /**
+   * Limite de tokens de saída DESTA chamada. Opcional: quando ausente, vale o limite configurado do
+   * provider (ANTHROPIC_MAX_OUTPUT_TOKENS / OPENAI_MAX_OUTPUT_TOKENS) — igual ao comportamento anterior.
+   */
+  maxOutputTokens?: number;
+  /**
+   * Máximo de requisições HTTP desta chamada (retentativas automáticas do httpClient incluídas).
+   * Opcional: ausente = padrão do httpClient (3). O agent-run usa 1 para que NENHUMA tentativa cobrável
+   * aconteça sem passar pelo portão de custo e sem aparecer no uso registrado.
+   */
+  maxHttpAttempts?: number;
 }
 
 /** Tokens medidos, reportados pela própria API do provider — nunca estimados aqui. */
@@ -30,6 +46,8 @@ export interface TaskResult {
   confidence?: number;
   /** Só presente quando a resposta da API traz a métrica de uso — ausente ≠ zero. */
   usage?: TokenUsage;
+  /** Requisições HTTP feitas pelo provider nesta chamada (ex.: 2 quando adaptou um parâmetro recusado). */
+  attempts?: number;
   raw?: unknown;
 }
 

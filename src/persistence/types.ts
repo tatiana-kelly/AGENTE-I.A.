@@ -99,7 +99,7 @@ export interface ProjectRecord {
 }
 
 export type ProjectPrincipalType = "user" | "service" | "agent";
-export type ProjectCapability = "read_context" | "audit" | "execute_assisted" | "approve" | "admin";
+export type ProjectCapability = "read_context" | "audit" | "execute_assisted" | "approve" | "agent_run" | "admin";
 
 export interface ProjectPermissionRecord {
   projectId: string;

@@ -140,7 +140,7 @@ const permissionRowSchema = z.object({
   project_id: z.string(),
   principal_type: z.enum(["user", "service", "agent"]),
   principal_id: z.string(),
-  capability: z.enum(["read_context", "audit", "execute_assisted", "approve", "admin"]),
+  capability: z.enum(["read_context", "audit", "execute_assisted", "approve", "agent_run", "admin"]),
   created_at: z.string(),
 });
 

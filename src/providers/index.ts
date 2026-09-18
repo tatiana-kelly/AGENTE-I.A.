@@ -42,6 +42,10 @@ export function buildProviderManagerFromEnv(env: NodeJS.ProcessEnv = process.env
           builder: env.OPENAI_MODEL_BUILDER,
         },
         reasoningEffort: parseOpenAIReasoningEffort(env.OPENAI_REASONING_EFFORT),
+        modelsWithoutReasoning: (env.OPENAI_MODELS_WITHOUT_REASONING ?? "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
         maxOutputTokens: numberOrUndefined(env.OPENAI_MAX_OUTPUT_TOKENS),
         estimatedMaxCostUsd: numberOrUndefined(env.OPENAI_MAX_COST_PER_CALL_USD),
       }),

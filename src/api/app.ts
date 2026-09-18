@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
+import { AGENT_RUNS_IDENTITY_PATH, AGENT_RUNS_PATH, handleAgentRunHttp, type AgentRunHttpDependencies } from "../agentRuns/index.js";
+import { LIMITS } from "../agentRuns/contract.js";
 import { orchestrate } from "../orchestrator/index.js";
 import { loadExecutionModeFromEnv, type SecurityContext } from "../orchestrator/securityLayer.js";
 import type { OrchestrationRepository } from "../persistence/index.js";
@@ -23,6 +25,11 @@ export interface ApiDependencies {
   webhookSecret: string;
   security?: SecurityContext;
   maxBodyBytes?: number;
+  /**
+   * Superfície /v1/agent-runs (sal.agent-run/1.0). Ausente = rota indisponível (fail-closed):
+   * ela tem autenticação própria (SAL-HMAC-SHA256) e nunca cai no Bearer do /orchestrate.
+   */
+  agentRuns?: AgentRunHttpDependencies;
 }
 
 export function createApiHandler(dependencies: ApiDependencies) {
@@ -33,11 +40,37 @@ export function createApiHandler(dependencies: ApiDependencies) {
 
   return async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     try {
+      const url = new URL(request.url ?? "/", "http://orchestrator.local");
+
+      // /v1/agent-runs é superfície separada, com autenticação própria; não passa pelo Bearer do n8n.
+      if (url.pathname === AGENT_RUNS_PATH || url.pathname === AGENT_RUNS_IDENTITY_PATH) {
+        if (!dependencies.agentRuns) {
+          writeJson(response, 503, {
+            error: "agent_runs_unavailable",
+            detail: "Autenticação do agent-run não configurada (AGENT_RUN_HMAC_SECRET ausente).",
+          });
+          return;
+        }
+        const raw = await readRawBody(request, LIMITS.bodyBytes);
+        const outcome = await handleAgentRunHttp(
+          {
+            method: request.method ?? "GET",
+            path: url.pathname,
+            contentType: request.headers["content-type"],
+            authorization: request.headers.authorization,
+            body: raw.body,
+            tooLarge: raw.tooLarge,
+          },
+          dependencies.agentRuns,
+        );
+        writeJson(response, outcome.status, outcome.body, outcome.headers);
+        return;
+      }
+
       if (!authorized(request.headers.authorization, webhookSecret)) {
         throw new ApiError(401, "Não autorizado.");
       }
 
-      const url = new URL(request.url ?? "/", "http://orchestrator.local");
       if (request.method === "POST" && url.pathname === "/orchestrate") {
         const body = orchestrateBodySchema.parse(await readJsonBody(request, maxBodyBytes));
         const result = await orchestrate(body, {
@@ -152,9 +185,30 @@ async function readJsonBody(request: IncomingMessage, maxBodyBytes: number): Pro
   }
 }
 
-function writeJson(response: ServerResponse, statusCode: number, body: unknown): void {
+/** Corpo bruto: a assinatura HMAC cobre exatamente os bytes recebidos, então nada pode ser reserializado. */
+async function readRawBody(
+  request: IncomingMessage,
+  maxBodyBytes: number,
+): Promise<{ body: string | undefined; tooLarge: boolean }> {
+  const declaredLength = Number(request.headers["content-length"] ?? 0);
+  if (Number.isFinite(declaredLength) && declaredLength > maxBodyBytes) {
+    return { body: undefined, tooLarge: true };
+  }
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes += buffer.length;
+    if (bytes > maxBodyBytes) return { body: undefined, tooLarge: true };
+    chunks.push(buffer);
+  }
+  return { body: Buffer.concat(chunks).toString("utf8"), tooLarge: false };
+}
+
+function writeJson(response: ServerResponse, statusCode: number, body: unknown, extraHeaders: Record<string, string> = {}): void {
   const payload = JSON.stringify(body);
   response.writeHead(statusCode, {
+    ...extraHeaders,
     "Content-Type": "application/json; charset=utf-8",
     "Content-Length": Buffer.byteLength(payload),
     "Cache-Control": "no-store",

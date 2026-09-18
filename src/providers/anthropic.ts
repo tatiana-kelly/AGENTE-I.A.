@@ -1,3 +1,4 @@
+import { ProviderCallError } from "./callError.js";
 import { describeProviderError, fetchJson } from "./httpClient.js";
 import type { AIProvider, HealthStatus, ModelProfile, TaskInput, TaskResult } from "./types.js";
 
@@ -70,9 +71,11 @@ export class AnthropicProvider implements AIProvider {
 
   async analyze(input: TaskInput): Promise<TaskResult> {
     const model = this.models[input.modelProfile ?? "balanced"];
+    const maxTokens = input.maxOutputTokens ?? this.maxTokens;
     const response = await fetchJson<MessagesResponse>(`${this.baseUrl}/messages`, {
       method: "POST",
-      timeoutMs: this.timeoutMs,
+      timeoutMs: input.timeoutMs ?? this.timeoutMs,
+      maxAttempts: input.maxHttpAttempts,
       headers: {
         "content-type": "application/json",
         "x-api-key": this.apiKey,
@@ -80,7 +83,7 @@ export class AnthropicProvider implements AIProvider {
       },
       body: JSON.stringify({
         model,
-        max_tokens: this.maxTokens,
+        max_tokens: maxTokens,
         thinking: { type: "adaptive" },
         output_config: { effort: this.effort },
         messages: [{ role: "user", content: input.prompt }],
@@ -88,8 +91,13 @@ export class AnthropicProvider implements AIProvider {
     });
 
     if (response.stop_reason === "max_tokens") {
-      throw new Error(
-        `Resposta Anthropic truncada em max_tokens=${this.maxTokens}; o resultado incompleto foi descartado.`,
+      // O texto é descartado, mas os tokens (cobrados) seguem no erro para a medição de custo.
+      throw new ProviderCallError(
+        "truncated",
+        `Resposta Anthropic truncada em max_tokens=${maxTokens}; o resultado incompleto foi descartado.`,
+        response.usage ? { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens } : undefined,
+        response.model ?? model,
+        1,
       );
     }
 

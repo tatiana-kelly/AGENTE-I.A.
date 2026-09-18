@@ -2,6 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/v1/agent-runs/identity",
+      "destination": "/api/index?route=/v1/agent-runs/identity"
+    },
+    {
+      "source": "/v1/agent-runs",
+      "destination": "/api/index?route=/v1/agent-runs"
+    },
+    {
       "source": "/orchestrate",
       "destination": "/api/index?route=/orchestrate"
     },

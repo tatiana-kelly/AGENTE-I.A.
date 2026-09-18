@@ -3,6 +3,7 @@ import { buildSupabaseRepositoryFromEnv } from "../persistence/index.js";
 import { buildProviderManagerFromEnv } from "../providers/index.js";
 import { createApiHandler } from "./app.js";
 import { createMcpHttpHandler } from "../mcp/http.js";
+import { buildAgentRunDependenciesFromEnv } from "../agentRuns/factory.js";
 
 type ApiHandler = ReturnType<typeof createApiHandler>;
 type McpHandler = ReturnType<typeof createMcpHttpHandler>;
@@ -52,7 +53,8 @@ function getHandler(): ApiHandler {
   if (!webhookSecret) throw new Error("N8N_WEBHOOK_SECRET não configurado.");
 
   const { manager } = buildProviderManagerFromEnv();
-  handler = createApiHandler({ repository, providerManager: manager, webhookSecret });
+  const agentRuns = buildAgentRunDependenciesFromEnv(repository, manager);
+  handler = createApiHandler({ repository, providerManager: manager, webhookSecret, agentRuns });
   return handler;
 }
 

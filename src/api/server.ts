@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { createApiHandler } from "./app.js";
 import { buildProviderManagerFromEnv } from "../providers/index.js";
 import { buildSupabaseRepositoryFromEnv } from "../persistence/index.js";
+import { buildAgentRunDependenciesFromEnv } from "../agentRuns/factory.js";
 
 const repository = buildSupabaseRepositoryFromEnv();
 if (!repository) throw new Error("A API exige SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.");
@@ -10,7 +11,8 @@ const webhookSecret = process.env.N8N_WEBHOOK_SECRET?.trim();
 if (!webhookSecret) throw new Error("N8N_WEBHOOK_SECRET não configurado.");
 
 const { manager } = buildProviderManagerFromEnv();
-const handler = createApiHandler({ repository, providerManager: manager, webhookSecret });
+const agentRuns = buildAgentRunDependenciesFromEnv(repository, manager);
+const handler = createApiHandler({ repository, providerManager: manager, webhookSecret, agentRuns });
 const server = createServer((request, response) => void handler(request, response));
 server.requestTimeout = 310_000;
 server.headersTimeout = 15_000;

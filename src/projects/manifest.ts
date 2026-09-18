@@ -29,6 +29,20 @@ export const projectManifestSchema = z.object({
     allowed_paths: z.array(relativePathSchema).min(1).max(100),
     denied_paths: z.array(relativePathSchema).max(100).default([]),
   }),
+  /**
+   * Fase 5F — definições de agente autorizadas, ARQUIVO POR ARQUIVO (nunca a pasta inteira). Entram no
+   * registro sob o prefixo reservado `agents/` e no sha256 do contexto; o agent-run só envia a definição
+   * do agente do próprio request.
+   */
+  agents: z
+    .object({
+      root: relativePathSchema.default(".claude/agents"),
+      files: z.array(relativePathSchema.refine((value) => value.endsWith(".md") && !value.includes("/"), {
+        message: "Definição de agente: arquivo .md direto na pasta de agentes.",
+      })).min(1).max(30),
+    })
+    .strict()
+    .optional(),
   commands: z.record(z.string().regex(/^[a-z][a-z0-9_-]*$/), z.string().trim().min(1).max(500)).default({}),
   changes: z.object({
     require_branch: z.boolean().default(true),
@@ -93,6 +107,28 @@ export async function loadManifestContext(
         (error.message.startsWith("Contexto excede") || error.message === "Caminho de contexto fora do projeto.")
       ) throw error;
       missing.push(fileName);
+    }
+  }
+
+  if (manifest.agents) {
+    const agentsRoot = await realpath(path.resolve(realProjectRoot, manifest.agents.root));
+    assertInsideProject(realProjectRoot, agentsRoot);
+    for (const fileName of manifest.agents.files) {
+      const key = `agents/${fileName}`;
+      try {
+        const filePath = await realpath(path.resolve(agentsRoot, fileName));
+        assertInsideProject(agentsRoot, filePath);
+        const contents = await readFile(filePath, "utf8");
+        totalBytes += Buffer.byteLength(contents);
+        if (totalBytes > maxTotalBytes) throw new Error(`Contexto excede ${maxTotalBytes} bytes.`);
+        files[key] = contents;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          (error.message.startsWith("Contexto excede") || error.message === "Caminho de contexto fora do projeto.")
+        ) throw error;
+        missing.push(key);
+      }
     }
   }
 

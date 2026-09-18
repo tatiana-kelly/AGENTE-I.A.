@@ -37,11 +37,11 @@ describe("OpenAIProvider", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://api.openai.com/v1/responses");
     expect(init.headers.authorization).toBe("Bearer sk-test");
-    expect(JSON.parse(init.body)).toMatchObject({
-      model: "gpt-5.6-terra",
-      input: "oi",
-      reasoning: { effort: "medium" },
-    });
+    const sent = JSON.parse(init.body);
+    expect(sent).toMatchObject({ model: "gpt-5.6-terra", input: "oi" });
+    // Fase 5F: a API real recusou reasoning.effort no gpt-5.6-terra (HTTP 400 unsupported_parameter,
+    // 2026-09-18). Este teste antes exigia o envio — ou seja, cristalizava o bug.
+    expect(sent).not.toHaveProperty("reasoning");
   });
 
   it("seleciona GPT-5.6 Sol para o perfil crítico", async () => {
@@ -412,5 +412,132 @@ describe("usage e truncamento nos demais providers", () => {
     );
     const result = await provider.analyze({ taskId: "t2", prompt: "oi" });
     expect(result.usage).toEqual({ inputTokens: 8, outputTokens: 3 });
+  });
+});
+
+describe("timeout por chamada (Fase 6)", () => {
+  it("AnthropicProvider respeita input.timeoutMs e aborta dentro do prazo informado", async () => {
+    const { AnthropicProvider } = await import("../src/providers/anthropic.js");
+    const hanging = vi.fn((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+    }));
+    vi.stubGlobal("fetch", hanging);
+    const provider = new AnthropicProvider({ apiKey: "test-key", estimatedMaxCostUsd: 0.2 });
+    const started = Date.now();
+    await expect(provider.analyze({ taskId: "t", prompt: "p", timeoutMs: 30 })).rejects.toThrow();
+    expect(Date.now() - started).toBeLessThan(5_000); // abortou pelo prazo da chamada, não pelos 30 s padrão
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("limite de saída por chamada (Fase 6)", () => {
+  it("AnthropicProvider usa input.maxOutputTokens quando informado e o padrão configurado quando não", async () => {
+    const { AnthropicProvider } = await import("../src/providers/anthropic.js");
+    const bodies: Array<{ max_tokens: number }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response(JSON.stringify({ content: [{ type: "text", text: "ok" }], model: "claude-sonnet-5", stop_reason: "end_turn" }),
+        { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const provider = new AnthropicProvider({ apiKey: "test-key", maxTokens: 4096, estimatedMaxCostUsd: 0.2 });
+    await provider.analyze({ taskId: "t", prompt: "p", maxOutputTokens: 8192 });
+    await provider.analyze({ taskId: "t", prompt: "p" });
+    expect(bodies.map((body) => body.max_tokens)).toEqual([8192, 4096]); // sem o campo, nada muda (/orchestrate)
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("Fase 5F — OpenAI reasoning.effort, truncamento e retentativas", () => {
+  const ok = (model: string) => new Response(JSON.stringify({
+    output: [{ type: "message", content: [{ type: "output_text", text: "ok" }] }], model, status: "completed",
+    usage: { input_tokens: 10, output_tokens: 5 },
+  }), { status: 200, headers: { "content-type": "application/json" } });
+  const rejectReasoning = () => new Response(JSON.stringify({ error: {
+    message: "Unsupported parameter: 'reasoning.effort' is not supported with this model.",
+    type: "invalid_request_error", param: "reasoning.effort", code: "unsupported_parameter",
+  } }), { status: 400, headers: { "content-type": "application/json" } });
+
+  it("modelo que ACEITA (gpt-5.6-sol, perfil critical) continua recebendo reasoning.effort", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init: RequestInit) => { calls.push(JSON.parse(String(init.body))); return ok("gpt-5.6-sol"); }));
+    const provider = new OpenAIProvider({ apiKey: "sk-test" });
+    const result = await provider.analyze({ taskId: "t", prompt: "p", modelProfile: "critical" });
+    expect(calls[0]).toMatchObject({ model: "gpt-5.6-sol", reasoning: { effort: "medium" } });
+    expect(result.attempts).toBe(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("modelo que RECUSA (gpt-5.6-terra, perfil balanced) não recebe o parâmetro — 1 requisição só", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init: RequestInit) => { calls.push(JSON.parse(String(init.body))); return ok("gpt-5.6-terra"); }));
+    const result = await new OpenAIProvider({ apiKey: "sk-test" }).analyze({ taskId: "t", prompt: "p" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).not.toHaveProperty("reasoning");
+    expect(result.attempts).toBe(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("modelo desconhecido que recusa: aprende, repete UMA vez sem o parâmetro e reporta attempts=2", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)); calls.push(body);
+      return "reasoning" in body ? rejectReasoning() : ok("modelo-novo");
+    }));
+    const provider = new OpenAIProvider({ apiKey: "sk-test", models: { balanced: "modelo-novo" } });
+    const first = await provider.analyze({ taskId: "t", prompt: "p" });
+    expect(calls.map((body) => "reasoning" in body)).toEqual([true, false]);
+    expect(first.attempts).toBe(2);
+    const second = await provider.analyze({ taskId: "t", prompt: "p" }); // já aprendeu: não tenta de novo
+    expect(calls).toHaveLength(3);
+    expect(second.attempts).toBe(1);
+    expect(provider.supportsReasoning("modelo-novo")).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it("outro 400 (não relacionado a reasoning) NÃO é repetido", async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ error: { message: "bad", param: "input", code: "invalid" } }),
+      { status: 400, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchSpy);
+    await expect(new OpenAIProvider({ apiKey: "sk-test", models: { balanced: "x" } }).analyze({ taskId: "t", prompt: "p" })).rejects.toThrow();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("OPENAI_MODELS_WITHOUT_REASONING amplia a lista por configuração", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init: RequestInit) => { calls.push(JSON.parse(String(init.body))); return ok("y"); }));
+    await new OpenAIProvider({ apiKey: "sk-test", models: { balanced: "y" }, modelsWithoutReasoning: ["y"] }).analyze({ taskId: "t", prompt: "p" });
+    expect(calls[0]).not.toHaveProperty("reasoning");
+    vi.unstubAllGlobals();
+  });
+
+  it("truncamento Anthropic preserva tokens e modelo no erro (custo não some)", async () => {
+    const { AnthropicProvider } = await import("../src/providers/anthropic.js");
+    const { ProviderCallError } = await import("../src/providers/callError.js");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      content: [{ type: "text", text: "meia resposta" }], model: "claude-sonnet-5", stop_reason: "max_tokens",
+      usage: { input_tokens: 5130, output_tokens: 4096 },
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+    const error = await new AnthropicProvider({ apiKey: "k" }).analyze({ taskId: "t", prompt: "p" }).catch((e) => e);
+    expect(error).toBeInstanceOf(ProviderCallError);
+    expect(error).toMatchObject({ kind: "truncated", usage: { inputTokens: 5130, outputTokens: 4096 }, model: "claude-sonnet-5" });
+    vi.unstubAllGlobals();
+  });
+
+  it("maxHttpAttempts=1 desliga as retentativas ocultas do httpClient; sem o campo, segue o padrão (3)", async () => {
+    const { AnthropicProvider } = await import("../src/providers/anthropic.js");
+    const failing = vi.fn(async () => new Response("erro", { status: 503 }));
+    vi.stubGlobal("fetch", failing);
+    const provider = new AnthropicProvider({ apiKey: "k" });
+    await expect(provider.analyze({ taskId: "t", prompt: "p", maxHttpAttempts: 1 })).rejects.toThrow();
+    expect(failing).toHaveBeenCalledTimes(1);
+    failing.mockClear();
+    vi.useFakeTimers();
+    const pending = provider.analyze({ taskId: "t", prompt: "p" }).catch(() => undefined);
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(failing).toHaveBeenCalledTimes(3); // comportamento do /orchestrate preservado
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 });

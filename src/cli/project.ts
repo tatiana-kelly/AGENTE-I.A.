@@ -69,7 +69,7 @@ function parsePrincipalType(value: string): ProjectPrincipalType {
 }
 
 function parseCapability(value: string): ProjectCapability {
-  if (value === "read_context" || value === "audit" || value === "execute_assisted" || value === "approve" || value === "admin") {
+  if (value === "read_context" || value === "audit" || value === "execute_assisted" || value === "approve" || value === "agent_run" || value === "admin") {
     return value;
   }
   throw new Error("--capability inválida.");
