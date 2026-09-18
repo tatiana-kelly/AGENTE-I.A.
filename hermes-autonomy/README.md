@@ -12,7 +12,9 @@ Hermes cron (nativo, --no-agent) ─► GUARDIAN ─► incidente? ─► DIAGNO
 ```
 
 - **Claude Code** = engenheiro (constrói, testa, documenta, mantém este código).
-- **Hermes Agent v0.21.2** = runtime (cron nativo, scripts, Skills, `hermes send`, memória de sessão).
+- **Hermes Agent v0.21.2** = runtime (cron nativo `--no-agent`, scripts, Skills).
+- **Fronteira:** Hermes = confiabilidade das AUTOMAÇÕES · SAL Intelligence OS = decisão sobre desvios do NEGÓCIO ·
+  AI Orchestrator = runtime técnico de IA. Ver [alignment-sal-os](docs/alignment-sal-os.md).
 - **Motor** = Python stdlib puro (sem dependências), determinístico — sem LLM no caminho crítico, custo zero de tokens.
 
 ## Início rápido

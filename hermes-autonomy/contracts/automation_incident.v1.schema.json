@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sal.automation-incident/1.0",
+  "title": "AUTOMATION_INCIDENT — Hermes Autonomy → SAL Intelligence OS",
+  "description": "Evento TÉCNICO sobre a confiabilidade de uma automação. Hermes relata fatos técnicos (esperado vs real, evidência, diagnóstico, ações técnicas tentadas, validação técnica). Hermes NÃO decide, NÃO aprova e NÃO declara resultado de negócio. Quem decide sobre impacto empresarial é o SAL OS (Decision Router → decision cycle → aprovação humana). CONTRATO APENAS — sem transporte implementado.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_type", "event_id", "source", "automation_id", "timestamp", "severity",
+               "incident_type", "expected", "actual", "evidence", "diagnosis", "confidence", "actions_attempted",
+               "validation", "recurrence", "requires_human", "requires_business_decision", "authority"],
+  "properties": {
+    "schema_version": {"const": "sal.automation-incident/1.0"},
+    "event_type": {"const": "AUTOMATION_INCIDENT"},
+    "event_id": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$",
+                 "description": "sha256(incident_id|lifecycle_state) — idempotente: o mesmo estado do mesmo incidente gera o mesmo id."},
+    "source": {"const": "hermes-autonomy"},
+    "automation_id": {"type": "string", "minLength": 1},
+    "automation_name": {"type": "string"},
+    "project_id": {"type": ["string", "null"], "description": "project_id do AI Orchestrator (ex.: torre-controle), quando mapeado no registry."},
+    "incident_id": {"type": "string"},
+    "root_cause_id": {"type": ["string", "null"]},
+    "timestamp": {"type": "string", "format": "date-time", "description": "ISO-8601 com offset."},
+    "severity": {"enum": ["P0", "P1", "P2", "P3"],
+                 "description": "Severidade TÉCNICA do incidente da automação. Não é a prioridade de negócio (essa é calculada pelo SAL OS)."},
+    "incident_type": {"enum": ["MISSED_EXECUTION", "DELAYED_EXECUTION", "FAILED_EXECUTION", "PARTIAL_EXECUTION",
+                               "MISSING_OUTPUT", "INVALID_OUTPUT", "DATA_NOT_UPDATED", "DELIVERY_FAILURE",
+                               "AUTHENTICATION_FAILURE", "API_FAILURE", "DEPENDENCY_FAILURE", "RESOURCE_FAILURE",
+                               "UNKNOWN_FAILURE", "RECURRING_FAILURE", "ROOT_CAUSE_INCIDENT"]},
+    "lifecycle_state": {"enum": ["DETECTED", "CLASSIFIED", "DIAGNOSING", "DIAGNOSED", "REPAIRING", "VALIDATING",
+                                 "RESOLVED", "ESCALATED"]},
+    "outcome": {"type": ["string", "null"],
+                "enum": ["AUTO_RECOVERED", "ALREADY_OK", "DELAY_RECORDED", "ESCALATED", "ESCALATED_WITH_ACTION_REQUIRED",
+                         "CIRCUIT_BREAKER_OPEN", "DRY_RUN_PLANNED", "RATE_LIMITED", null]},
+    "expected": {
+      "type": "object", "additionalProperties": false, "required": ["window", "criteria"],
+      "properties": {
+        "window": {"type": ["string", "null"], "format": "date-time", "description": "Horário em que a automação deveria ter rodado."},
+        "criteria": {"type": "array", "items": {"type": "string"}, "description": "Critérios declarados no registry (PROCESS_STARTED, OUTPUT_EXISTS, DATA_UPDATED...)."},
+        "outputs": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "actual": {
+      "type": "object", "additionalProperties": false, "required": ["run_started_at", "criteria_results"],
+      "properties": {
+        "run_started_at": {"type": ["string", "null"], "format": "date-time"},
+        "criteria_results": {"type": "object", "additionalProperties": {"enum": ["pass", "fail", "unverifiable"]}},
+        "summary": {"type": "string"}
+      }
+    },
+    "evidence": {
+      "type": "array", "maxItems": 50,
+      "items": {"type": "object", "additionalProperties": false, "required": ["criterion", "result", "source", "detail"],
+                "properties": {"criterion": {"type": "string"}, "result": {"enum": ["pass", "fail", "unverifiable"]},
+                               "source": {"type": "string"}, "detail": {"type": "string", "description": "Texto já redigido (sem segredos)."},
+                               "ref": {"type": ["string", "null"], "description": "Caminho de log/arquivo ou URL de run."}}}
+    },
+    "diagnosis": {
+      "type": "object", "additionalProperties": false, "required": ["cause_code", "probable_cause", "transient"],
+      "properties": {
+        "cause_code": {"type": "string", "description": "Ex.: NETWORK_TIMEOUT, TASK_ACCESS_DENIED, UNKNOWN_CAUSE."},
+        "probable_cause": {"type": "string"},
+        "cause_key": {"type": "string"},
+        "transient": {"type": "boolean"},
+        "investigation_steps": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "actions_attempted": {
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": false, "required": ["attempt", "action", "risk_level", "dry_run", "result"],
+                "properties": {"attempt": {"type": "integer", "minimum": 0}, "action": {"type": "string",
+                               "description": "Somente ações TÉCNICAS da matriz do Reparador (rerun_task, rerun_command, restart_task, cleanup_temp)."},
+                               "risk_level": {"enum": ["low", "medium", "high"]}, "dry_run": {"type": "boolean"},
+                               "result": {"type": "string"}}}
+    },
+    "validation": {
+      "type": "object", "additionalProperties": false, "required": ["scope", "status"],
+      "properties": {
+        "scope": {"const": "technical", "description": "Validação TÉCNICA da execução da automação. Nunca é verificação de resultado de negócio."},
+        "status": {"enum": ["TECHNICAL_OK", "TECHNICAL_FAIL", "NOT_RUN", "INSUFFICIENT_EVIDENCE"]},
+        "validated_by": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "recurrence": {
+      "type": "object", "additionalProperties": false, "required": ["count"],
+      "properties": {"count": {"type": "integer", "minimum": 0, "description": "Ocorrências anteriores da mesma causa nesta automação."},
+                     "last_resolution": {"type": ["string", "null"]},
+                     "circuit_breaker_open": {"type": "boolean"}}
+    },
+    "requires_human": {"type": "boolean", "description": "Precisa de intervenção humana TÉCNICA (credencial, permissão, dependência)."},
+    "human_action": {"type": ["string", "null"]},
+    "requires_business_decision": {"type": "boolean",
+                                   "description": "true quando o incidente técnico deixou dado/entrega de negócio ausente, desatualizado ou suspeito além da janela declarada — o SAL OS decide o que fazer. Hermes não sugere decisão empresarial."},
+    "business_impact": {"type": ["string", "null"], "description": "Impacto declarado no registry (fato), não recomendação."},
+    "authority": {
+      "type": "object", "additionalProperties": false,
+      "required": ["can_repair_technical_low_risk", "can_approve_business_decision", "can_execute_business_action",
+                   "can_declare_business_verified"],
+      "properties": {
+        "can_repair_technical_low_risk": {"type": "boolean"},
+        "can_approve_business_decision": {"const": false},
+        "can_execute_business_action": {"const": false},
+        "can_declare_business_verified": {"const": false}
+      }
+    },
+    "audit_ref": {"type": "string", "description": "Referência ao audit_log técnico local do Hermes (ex.: incident_id)."}
+  },
+  "$comment": "Chaves PROIBIDAS em qualquer nível (mesma lista do AI Orchestrator /v1/agent-runs): approved_decision, execute_action, executed_action, verified_ok (e variantes camelCase)."
+}

@@ -144,7 +144,7 @@ class TestPriorityReportNotify(unittest.TestCase):
             note = Notification(kind="immediate", subject="s", body="token=abc123456789", dedupe_key="k1")
             first = service.notify(note)
             self.assertIn("outbox", first)
-            self.assertNotIn("hermes_send", first)  # canal externo só existe se configurado
+            self.assertNotIn("email_agent", first)  # canal externo só existe se configurado
             self.assertEqual(service.notify(Notification(kind="immediate", subject="s", body="b", dedupe_key="k1")),
                              {"status": "DEDUPED"})
             body = next((Path(tmp) / "outbox").glob("*.md")).read_text(encoding="utf-8")
@@ -154,11 +154,11 @@ class TestPriorityReportNotify(unittest.TestCase):
     def test_external_channels_disabled_by_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             settings = load_settings(config_path=str(Path(tmp) / "none.json"), state_dir=tmp,
-                                     overrides={"notification": {"channels": ["outbox", "hermes_send"],
-                                                                 "hermes_send_target": "whatsapp"}})
+                                     overrides={"notification": {"channels": ["outbox", "email_agent"],
+                                                                 "email_agent": {"path": tmp, "recipient": "x@y"}}})
             store = Store(Path(tmp) / "autonomy.db")
             result = NotificationService(settings, store).notify(Notification(kind="immediate", subject="s", body="b"))
-            self.assertTrue(result["hermes_send"].startswith("SKIPPED"))
+            self.assertTrue(result["email_agent"].startswith("SKIPPED"))
             store.close()
 
 

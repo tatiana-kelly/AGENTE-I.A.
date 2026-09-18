@@ -14,10 +14,9 @@
 
 ## Achados de segurança da auditoria (fora do escopo deste código — requer decisão da Tatiana)
 
-1. `C:\Users\tatiana.silva\.claude\skills\integrar-email-agent\SKILL.md` contém o **valor literal** do
-   segredo compartilhado `EMAIL_AGENT_TRIGGER_SECRET`. Recomendação: remover o valor do arquivo e rotacionar
-   o segredo nos projetos Supabase que o usam.
-2. `C:\ssw-relatorios\enviar_resumo_455.py` envia e-mail via **Resend direto** (remetente `onboarding@resend.dev`),
-   fora do Email Agent oficial — candidato a migração com a skill `integrar-email-agent`.
+1. `EMAIL_AGENT_TRIGGER_SECRET` literal na skill `integrar-email-agent` — **valor removido em 18/09/2026**
+   (0 outras cópias fora de `.env*`). **Rotação: HUMAN_REQUIRED (bloqueador)** — ver `alignment-sal-os.md` §8.
+2. `C:\ssw-relatorios\enviar_resumo_455.py` enviava via **Resend direto** — **corrigido em 18/09/2026** para o Email Agent
+   (working tree, sem commit). Pendente: envio real de teste autorizado e remoção de `RESEND_API_KEY` do `.env`.
 3. `.env` e backups `.env.bak-*` em `C:\ssw-relatorios`, `C:\Projeto ClaudeCode`, `tati-command-deck` — confirmar
    que estão no `.gitignore` dos respectivos repositórios.

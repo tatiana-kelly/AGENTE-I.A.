@@ -9,7 +9,7 @@
 | Motor | Python stdlib, determinístico | roda no Python do próprio Hermes (3.11) e no do sistema (3.12); sem dependências novas |
 | Registry | JSON versionado no Git (`registry/automations.json`) | revisável em PR, validado por teste; expansão por `instances` evita repetição |
 | Memória/auditoria | SQLite local (`%LOCALAPPDATA%\hermes\autonomy\autonomy.db`) | um arquivo, transacional, sem servidor; o Supabase não recebe dado operacional desta camada |
-| Notificação | `NotificationService` → outbox (sempre) + `hermes send` / Email Agent oficial (opt-in) | regra SAL: e-mail só via Email Agent; reaproveita plataformas já configuradas no Hermes |
+| Notificação | `NotificationService` → outbox (sempre) + Email Agent oficial (opt-in) | regra SAL: notificação só via Email Agent; sem segundo sistema de mensagens (ver `alignment-sal-os.md`) |
 | LLM | fora do caminho crítico | diagnóstico por evidência catalogada; Skills permitem que um agente Hermes consulte/explique |
 
 ## Componentes
@@ -23,7 +23,7 @@ hermes-autonomy/
     validator.py       reverificação completa sobre o que o reparo escreveu (baseline por offset/mtime)
     escalator.py       mensagem acionável; imediato vs relatório; incidente raiz
     orchestrator.py    fluxo central + ciclo de vida + agrupamento por causa raiz
-    notify.py          canais (terminal, outbox, hermes_send, email_agent)
+    notify.py          canais (terminal, outbox, email_agent)
     report.py          HERMES AUTOMATION HEALTH diário
     store.py           SQLite: incidents, incident_events, repair_attempts, audit_log, notifications,
                        circuit, skill_candidates, runs, checks

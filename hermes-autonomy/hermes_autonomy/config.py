@@ -30,7 +30,6 @@ DEFAULTS: dict[str, Any] = {
         "channels": ["terminal", "outbox"],
         "external_enabled": False,
         "immediate_min_priority": "P1",
-        "hermes_send_target": None,
         "email_agent": {"path": "C:\\CENTRO-DE-AGENTES-IA", "recipient": None},
         "dedupe_hours": 12,
     },

@@ -1,16 +1,14 @@
 """NotificationService — camada abstrata de canais.
 
 Canais internos (sempre): terminal, outbox (arquivo .md no state dir).
-Canais externos (só com notification.external_enabled=true — decisão da Tatiana):
-  hermes_send  → `hermes send --to <alvo>` (reusa plataformas já configuradas no Hermes)
+Canal externo (só com notification.external_enabled=true — decisão da Tatiana):
   email_agent  → Email Agent oficial SAL (C:\\CENTRO-DE-AGENTES-IA\\agents\\email_agent.py)
-Nenhum SMTP/Resend próprio (regra do ecossistema).
+Nenhum SMTP/Resend próprio e nenhum segundo sistema de mensagens (regra do ecossistema:
+notificação pertence ao Email Agent). Ver docs/alignment-sal-os.md.
 """
 from __future__ import annotations
 
-import subprocess
 import sys
-import tempfile
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -61,21 +59,6 @@ class OutboxChannel:
         return True, str(path)
 
 
-class HermesSendChannel:
-    name, external = "hermes_send", True
-
-    def __init__(self, target: str):
-        self.target = target
-
-    def send(self, note: Notification) -> tuple[bool, str]:
-        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as handle:
-            handle.write(note.body)
-        proc = subprocess.run(["hermes", "send", "--to", self.target, "--subject", note.subject, "--file",
-                               handle.name, "--quiet"], capture_output=True, text=True, timeout=60)
-        Path(handle.name).unlink(missing_ok=True)
-        return proc.returncode == 0, redact((proc.stderr or proc.stdout or "").strip())[:300]
-
-
 class EmailAgentChannel:
     name, external = "email_agent", True
 
@@ -106,8 +89,6 @@ class NotificationService:
         channels: list[Any] = [OutboxChannel(self.settings.state_dir / "outbox")]
         if "terminal" in chosen:
             channels.append(TerminalChannel())
-        if "hermes_send" in chosen and self.cfg.get("hermes_send_target"):
-            channels.append(HermesSendChannel(self.cfg["hermes_send_target"]))
         email = self.cfg.get("email_agent") or {}
         if "email_agent" in chosen and email.get("recipient"):
             channels.append(EmailAgentChannel(email["path"], email["recipient"]))

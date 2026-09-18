@@ -1,0 +1,54 @@
+{
+  "schema_version": "sal.automation-incident/1.0",
+  "event_type": "AUTOMATION_INCIDENT",
+  "event_id": "sha256:3f1d2c9a7b6e5d4c3b2a1908f7e6d5c4b3a2918070f6e5d4c3b2a19080706050",
+  "source": "hermes-autonomy",
+  "automation_id": "torre-fechar-dia",
+  "automation_name": "Torre — Fechar Dia 15h15",
+  "project_id": "torre-controle",
+  "incident_id": "INC-20260918-104905-44f9",
+  "root_cause_id": null,
+  "timestamp": "2026-09-18T10:49:05-03:00",
+  "severity": "P1",
+  "incident_type": "FAILED_EXECUTION",
+  "lifecycle_state": "ESCALATED",
+  "outcome": "ESCALATED_WITH_ACTION_REQUIRED",
+  "expected": {
+    "window": "2026-09-17T15:15:00-03:00",
+    "criteria": ["PROCESS_STARTED", "PROCESS_FINISHED"],
+    "outputs": ["snapshot/logs/fechar_dia_15h_<data>_<hora>.log", "painel da competência publicado"]
+  },
+  "actual": {
+    "run_started_at": "2026-09-17T15:15:15-03:00",
+    "criteria_results": {"PROCESS_STARTED": "pass", "ON_TIME": "pass", "PROCESS_FINISHED": "fail"},
+    "summary": "Agendador não conseguiu iniciar a ação; último log do fechamento é de 14/09 18:41."
+  },
+  "evidence": [
+    {"criterion": "PROCESS_FINISHED", "result": "fail", "source": "task_scheduler",
+     "detail": "Agendador não conseguiu iniciar a ação: acesso negado (0x80070005)", "ref": "\\Torre - Fechar Dia 15h15"},
+    {"criterion": "PROCESS_FINISHED", "result": "fail", "source": "filesystem",
+     "detail": "log fechar dia: fechar_dia_15h_2026-09-14_18-37.log não foi atualizado nesta execução (modificado 14/09 18:41)",
+     "ref": "C:/Projeto ClaudeCode/Torre-de-Controle/snapshot/logs/"}
+  ],
+  "diagnosis": {
+    "cause_code": "TASK_ACCESS_DENIED",
+    "probable_cause": "Agendador não conseguiu iniciar a ação: acesso negado (0x80070005)",
+    "cause_key": "TASK_ACCESS_DENIED@torre-fechar-dia",
+    "transient": false
+  },
+  "confidence": 0.9,
+  "actions_attempted": [],
+  "validation": {"scope": "technical", "status": "NOT_RUN", "validated_by": []},
+  "recurrence": {"count": 0, "last_resolution": null, "circuit_breaker_open": false},
+  "requires_human": true,
+  "human_action": "Revisar conta/permissões da tarefa agendada (executar com o usuário correto, caminho acessível)",
+  "requires_business_decision": false,
+  "business_impact": "Torre segue mostrando o dia anterior até a rodada da nuvem (atraso de até 3h observado).",
+  "authority": {
+    "can_repair_technical_low_risk": true,
+    "can_approve_business_decision": false,
+    "can_execute_business_action": false,
+    "can_declare_business_verified": false
+  },
+  "audit_ref": "INC-20260918-104905-44f9"
+}

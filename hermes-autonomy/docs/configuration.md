@@ -18,10 +18,9 @@ flags da CLI (`--live`, `--fast`).
 | `rate_limits.notifications_per_hour` | 6 | só canais externos |
 | `rate_limits.http_calls_per_run` | 60 | checks HTTP por rodada |
 | `defaults.grace_minutes / delay_tolerance_minutes / max_duration_minutes` | 20 / 10 / 60 | usados quando o registry não define |
-| `notification.channels` | `["outbox"]` | `terminal`, `outbox`, `hermes_send`, `email_agent` |
+| `notification.channels` | `["outbox"]` | `terminal`, `outbox`, `email_agent` (único canal externo — regra SAL) |
 | `notification.external_enabled` | `false` | liga canais externos (decisão da Tatiana) |
 | `notification.immediate_min_priority` | `P1` | P0/P1 e ação necessária = alerta imediato; resto vai ao relatório |
-| `notification.hermes_send_target` | `null` | ex.: `whatsapp:<chat_id>` (ver `hermes send --list`) |
 | `notification.email_agent.recipient` | `null` | ex.: `tatiana@salexpress.com.br` — usa o Email Agent oficial |
 | `notification.dedupe_hours` | 12 | mesma notificação não repete dentro do intervalo |
 
