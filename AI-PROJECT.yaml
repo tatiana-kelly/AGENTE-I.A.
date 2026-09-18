@@ -23,6 +23,7 @@ access:
     - projects/**
     - .ai/**
     - .agents/**
+    - hermes-autonomy/**
     - "*.md"
     - "*.json"
     - "*.yaml"
