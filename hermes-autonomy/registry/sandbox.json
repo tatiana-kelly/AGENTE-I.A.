@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "description": "Registry isolado da automação-canário usada para provar o ciclo completo sem tocar produção.",
+  "automations": [
+    {
+      "id": "hermes-canary",
+      "name": "Hermes Canary (sandbox)",
+      "description": "Automação sintética controlada: gera log, saída JSON, 'banco' (arquivo) e 'entrega' simulada.",
+      "source": "command",
+      "repository": "tatiana-kelly/AGENTE-I.A",
+      "script": "{app_root}/hermes_autonomy/canary.py",
+      "command": ["{python}", "-m", "hermes_autonomy.canary", "run", "--state-dir", "{state_dir}"],
+      "workdir": "{app_root}",
+      "schedule": {"type": "daily", "times": ["00:05"]},
+      "grace_minutes": 0,
+      "max_duration_minutes": 2,
+      "expected_outputs": ["canary_YYYYMMDD.json", "canary_table.json atualizado", "entrega simulada registrada no log"],
+      "dependencies": ["canary-api"],
+      "success_criteria": ["PROCESS_STARTED", "PROCESS_FINISHED", "OUTPUT_EXISTS", "OUTPUT_VALID", "DATA_UPDATED", "DELIVERY_COMPLETED"],
+      "failure_criteria": ["linha ERROR no log", "saída ausente", "banco não atualizado", "entrega ausente"],
+      "checks": [
+        {"type": "file", "kind": "log", "label": "log", "path": "{state_dir}/canary/logs/canary_{date:%Y%m%d}.log",
+         "segment": "since_run", "success_patterns": ["=== fim ==="], "failure_patterns": ["\\|\\s*ERROR\\s*\\|"]},
+        {"type": "file", "kind": "output", "label": "saída", "path": "{state_dir}/canary/output/canary_{date:%Y%m%d}.json",
+         "json_valid": true, "min_bytes": 10},
+        {"type": "file", "kind": "data", "label": "banco (simulado)", "path": "{state_dir}/canary/data/canary_table.json"},
+        {"type": "file", "kind": "delivery", "label": "entrega", "path": "{state_dir}/canary/logs/canary_{date:%Y%m%d}.log",
+         "segment": "since_run", "success_patterns": ["entrega: enviado"]}
+      ],
+      "allowed_recovery_actions": ["rerun_command"],
+      "idempotent": true,
+      "risk_level": "low",
+      "criticality": "medium",
+      "impact": "Nenhum (sandbox) — representa um relatório diário indisponível.",
+      "owner": "Tatiana",
+      "enabled": true
+    }
+  ]
+}

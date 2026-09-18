@@ -1,0 +1,26 @@
+{
+  "dry_run": true,
+  "autonomous_repair": false,
+  "max_repair_attempts": 3,
+  "max_repair_risk": "low",
+  "repair_window_hours": 6,
+  "validation": {"poll_seconds": 15, "timeout_seconds": 1800, "settle_seconds": 5},
+  "retry_backoff_seconds": [0, 60, 180],
+  "circuit_breaker": {"failure_threshold": 5, "window_hours": 24, "cooldown_hours": 6},
+  "rate_limits": {
+    "repairs_per_hour": 10,
+    "repairs_per_automation_per_day": 6,
+    "notifications_per_hour": 6,
+    "http_calls_per_run": 60
+  },
+  "defaults": {"grace_minutes": 20, "delay_tolerance_minutes": 10, "max_duration_minutes": 60},
+  "notification": {
+    "channels": ["outbox"],
+    "external_enabled": false,
+    "immediate_min_priority": "P1",
+    "hermes_send_target": null,
+    "email_agent": {"path": "C:\\CENTRO-DE-AGENTES-IA", "recipient": null},
+    "dedupe_hours": 12
+  },
+  "report": {"title": "HERMES AUTOMATION HEALTH"}
+}
