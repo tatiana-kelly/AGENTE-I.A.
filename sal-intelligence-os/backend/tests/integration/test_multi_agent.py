@@ -20,7 +20,13 @@ from app.agent_bridge.contract import (
     ExecutionLimits,
     InvestigationOutput,
 )
-from app.agent_bridge.multi_agent import MultiAgentInvestigation, RouteNotInvestigable, consolidate
+from app.agent_bridge.multi_agent import (
+    CASE_BUDGET_USD,
+    CORRECTION_ROUNDS,
+    MultiAgentInvestigation,
+    RouteNotInvestigable,
+    consolidate,
+)
 from app.decision_cycle.states import CaseState, IllegalTransition, assert_transition
 from app.decision_router.adapters.base import PRIORITY_SEVERITY
 from app.decision_router.adapters.torre_transferencias import SOURCE as TRANSFER_SOURCE
@@ -246,3 +252,92 @@ def test_execucao_rejeitada_preserva_run_id_e_uso_real_para_auditoria():
     assert all(o.usage == usage for o in result.outcomes)
     assert all("facts.0" in o.error for o in result.outcomes)
     assert result.final_status == "failed"
+
+
+# ── Política de caso (2026-09-18): 1 correção por agente + orçamento de US$ 3,50 por caso ────────────────
+
+
+class ScriptedReviewClient(FakeClient):
+    """Revisões em sequência (ex.: REJECTED e depois APPROVED) e reserva por execução, como o Orchestrator informa."""
+
+    def __init__(self, reviews: list[str], reserve: dict[str, float] | None = None, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._reviews = list(reviews)
+        self._reserve = reserve or {"agent": 0.4, "review": 1.0}
+
+    def run(self, request, **kwargs):
+        if request.review_target is not None:
+            self._review_status = self._reviews.pop(0) if self._reviews else "REJECTED"
+        result = super().run(request, **kwargs)
+        kind = "review" if request.review_target is not None else "agent"
+        if self._reserve[kind] > request.execution_limits.max_cost_usd_per_job:  # o Orchestrator bloquearia, sem custo
+            raise AgentRunProviderFailure(402, "budget_exceeded", "Custo acumulado acima do limite do job.")
+        usage = [dict(item, reserved_cost_usd=self._reserve[kind]) for item in result.usage]
+        return result.model_copy(update={"usage": tuple(usage)})
+
+
+def _run_policy(client, **overrides):
+    return MultiAgentInvestigation(client, CONFIG).run(
+        route=_route(), case_id="caso-sintetico", task_by_agent={}, default_task="Investigue a baixa ocupação sintética.",
+        context_files=("ARCHITECTURE.md",), evidence=EVIDENCE, limits=LIMITS, review_task="Revise a consolidação.",
+        correction_rounds=overrides.get("rounds", CORRECTION_ROUNDS), case_budget_usd=overrides.get("budget", CASE_BUDGET_USD),
+    )
+
+
+def test_politica_vigente_e_1_correcao_e_3_50_por_caso():
+    assert (CORRECTION_ROUNDS, CASE_BUDGET_USD) == (1, 3.50)
+
+
+def test_reprovado_gera_uma_correcao_por_agente_com_parecer_e_saida_anterior_e_nova_revisao():
+    client = ScriptedReviewClient(["REJECTED", "APPROVED"], reserve={"agent": 0.4, "review": 0.4})
+    result = _run_policy(client)
+    assert [c.agent for c in result.corrections] == ["investigador", "transferencia"]
+    correction_requests = [r for r in client.requests if r.review_target is None][2:]
+    assert all("CORREÇÃO (1 de 1)" in r.task for r in correction_requests)
+    assert all(r.previous_results[0].startswith("[SUA SAÍDA ANTERIOR]") for r in correction_requests)
+    assert all("[PARECER DO REVISOR INDEPENDENTE" in r.previous_results[1] and "revisão do conjunto" in r.previous_results[1]
+               for r in correction_requests)
+    keys = [r.idempotency_key for r in client.requests]
+    assert len(set(keys)) == len(keys) == 6  # 2 agentes + revisão + 2 correções + nova revisão, chaves distintas
+    assert [r.get("status") for r in result.reviews] == ["REJECTED", "APPROVED"]
+    assert result.final_status == "succeeded" and result.case_state.value == "INVESTIGATING"
+    assert result.trace[-4:] == ("CORRECTION:transferencia:succeeded", "CONSOLIDATION:2/2", "REVIEW:APPROVED", "SUCCEEDED")
+    assert result.case_reserved_usd == pytest.approx(0.4 * 6)
+
+
+def test_aprovado_na_primeira_revisao_nao_gera_correcao():
+    result = _run_policy(ScriptedReviewClient(["APPROVED"]))
+    assert result.corrections == () and len(result.reviews) == 1
+
+
+def test_no_maximo_uma_rodada_mesmo_reprovado_de_novo():
+    client = ScriptedReviewClient(["REJECTED", "REJECTED"], reserve={"agent": 0.4, "review": 0.4})
+    result = _run_policy(client)
+    assert len(result.corrections) == 2 and len(result.reviews) == 2
+    assert result.final_status == "needs_human"
+
+
+def test_orcamento_do_caso_limita_o_job_e_bloqueia_o_que_nao_cabe():
+    # reserva real medida: agente US$ 0,40 e revisão US$ 1,00 → 0,8 + 1,0 + 0,8 = 2,6; a 2ª revisão (1,0) não cabe em 3,50
+    client = ScriptedReviewClient(["REJECTED", "APPROVED"])
+    result = _run_policy(client)
+    assert len(result.corrections) == 2
+    assert result.reviews[-1]["status"] == "NOT_RUN" and "budget_exceeded" in result.reviews[-1]["error"]
+    assert result.case_reserved_usd == pytest.approx(2.6) and result.case_reserved_usd <= CASE_BUDGET_USD
+    last_review = client.requests[-1]
+    assert last_review.execution_limits.max_cost_usd_per_job == pytest.approx(3.5 - 2.6)
+    assert result.final_status == "needs_human"
+
+
+def test_orcamento_esgotado_nao_envia_nada():
+    client = ScriptedReviewClient(["REJECTED"], reserve={"agent": 2.0, "review": 1.0})
+    result = _run_policy(client, budget=2.0)
+    assert result.outcomes[1].error == "orçamento do caso esgotado: não executado"
+    assert len([r for r in client.requests if r.review_target is None]) == 1  # o 2º agente nem saiu
+    assert result.reviews[0]["status"] == "NOT_RUN"
+
+
+def test_sem_politica_o_comportamento_anterior_e_mantido():
+    client = FakeClient()
+    result = _run(client)
+    assert result.corrections == () and len(client.requests) == 3 and result.case_budget_usd is None
