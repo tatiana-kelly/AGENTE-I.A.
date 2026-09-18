@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
 
+    # Ponte SAL OS → AI Orchestrator (/v1/agent-runs). Sem estes valores o cliente não é construído.
+    orchestrator_base_url: str | None = None
+    agent_run_hmac_secret: str | None = None
+    agent_run_principal: str = "service:sal-intelligence-os"
+    agent_run_project: str = "sal-intelligence-os"
+
     environment: str = "development"
 
 

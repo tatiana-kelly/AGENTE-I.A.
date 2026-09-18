@@ -1,0 +1,12 @@
+{
+  "_comment": "Vetor compartilhado: prova que SAL OS (Python) e AI Orchestrator (TypeScript) assinam igual. Segredo de teste, nao de producao.",
+  "secret": "vetor-de-assinatura-compartilhado-32-chars",
+  "method": "POST",
+  "path": "/v1/agent-runs",
+  "timestamp": "2026-09-17T12:00:00.000Z",
+  "nonce": "nonce-vetor-0001",
+  "principal": "service:sal-intelligence-os",
+  "body": "{\"protocol_version\":\"sal.agent-run/1.0\",\"task\":\"exemplo de vetor\"}",
+  "body_hash_sha256": "ede79bbd311316605b0e8da428c9c333e6e83ac1a499d37276ba9b86f3495e90",
+  "expected_signature": "841161773687870625ab6822ab6bae2a3998ebc7715a6fe7989a00ae86d580f0"
+}

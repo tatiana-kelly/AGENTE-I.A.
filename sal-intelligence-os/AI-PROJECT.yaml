@@ -1,0 +1,53 @@
+version: 1
+project_id: sal-intelligence-os
+name: SAL Intelligence OS
+repository: tatiana-kelly/sal-intelligence-os
+default_branch: main
+
+# Contexto autorizado: aponta para documentos técnicos que JÁ EXISTEM neste repositório.
+# Nenhum conteúdo de negócio foi escrito para este cadastro. Ampliar esta lista (por exemplo com
+# MASTER_SPEC.md ou regras operacionais) é decisão de governança da Tatiana, não do agente.
+context:
+  root: docs
+  files:
+    - ARCHITECTURE.md
+    - DATA_MODEL.md
+    - AGENT_WORKFLOW.md
+
+# Definições de agente autorizadas como contexto do agent-run — explícitas, uma a uma (Fase 5F).
+# Só os agentes que o Decision Router aciona hoje em transferências. Ampliar é decisão de governança.
+agents:
+  root: .claude/agents
+  files:
+    - investigador.md
+    - transferencia.md
+
+access:
+  default: read_only
+  allowed_paths:
+    - backend/app/**
+    - backend/tests/**
+    - config/**
+    - schemas/**
+    - docs/**
+  denied_paths:
+    - .env
+    - "**/.env"
+    - "**/credentials/**"
+    - "**/service_account.json"
+    - "**/*.pem"
+    - "**/*.key"
+    - backend/artifacts/**
+
+commands:
+  test: pytest
+  lint: ruff check .
+
+changes:
+  require_branch: true
+  require_tests: true
+  require_human_approval_for:
+    - push
+    - pull_request
+    - deploy
+    - database_migration
