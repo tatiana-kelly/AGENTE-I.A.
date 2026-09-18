@@ -50,5 +50,25 @@
     "can_execute_business_action": false,
     "can_declare_business_verified": false
   },
+  "ai_review_signals": {
+    "unknown_cause": false,
+    "confidence": 0.9,
+    "conflicting_evidence": {"present": false, "cause_codes": ["TASK_ACCESS_DENIED"]},
+    "repeated_failure": {"present": true, "count_window": 4, "window_hours": 96, "auto_recovered_same_cause": 0,
+                         "circuit_breaker_open": false},
+    "actions_attempted": 0
+  },
+  "routing_context": {
+    "entity_type": "automation",
+    "entity_id": "torre-fechar-dia",
+    "period": "2026-09-17",
+    "registry_version": "registry@c6d3dc8",
+    "last_success_at": "2026-09-14T18:41:00-03:00",
+    "stale_hours": 88.1,
+    "max_age_hours": 24,
+    "affected_outputs": ["painel da competência publicado"],
+    "missing_data": [],
+    "evidence_completeness_pct": 100
+  },
   "audit_ref": "INC-20260918-104905-44f9"
 }

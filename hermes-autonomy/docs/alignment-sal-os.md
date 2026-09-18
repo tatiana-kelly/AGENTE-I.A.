@@ -91,24 +91,27 @@ Falta decidir o gatilho do cron Hermes (ticker `hermes cron tick` ou gateway) �
 - **A verificar** (fora do escopo pedido): o caminho serverless (`pg_cron`) do e-mail do 455 também pode estar fora
   do Email Agent.
 
-## 5. IA — determinístico primeiro
+## 5. IA — o Hermes fornece evidência, a camada de decisão decide (revisado na Fase 2)
 
-O Hermes não chama IA hoje. Plano, que **ainda não foi implementado**: acionar o AI Orchestrator por `/v1/agent-runs` **somente** quando
-- `cause_code == UNKNOWN_CAUSE`, ou
-- `confidence < 0.5`, ou
-- houver evidências conflitantes (≥ 2 causas de tipos diferentes), ou
-- houver recorrência mascarada (a mesma causa `AUTO_RECOVERED` ≥ 3× em 7 dias, ou seja, o reparo esconde a causa raiz).
+O Hermes **não chama IA** e **não decide quando uma chamada de IA vale o custo**: nenhum limiar de "chamar IA" fica fixo
+dentro do Hermes (teste `test_engine_code_never_calls_ai`). O que ele faz é publicar, no contrato, o bloco
+`ai_review_signals`, com fatos apenas:
 
-Regras da chamada:
-- `profile: "fast"` e `output_contract.kind: "investigation"`.
-- `agent_authority{can_recommend:true, can_propose:false, can_approve:false, can_execute:false}`.
-- As evidências vão já redigidas.
-- O resultado (hipóteses) só **enriquece o diagnóstico**. Nunca amplia a matriz de reparo nem dispara ação.
+| Sinal | Como o Hermes deriva (determinístico) |
+|---|---|
+| `unknown_cause` | `diagnosis.cause_code == "UNKNOWN_CAUSE"` |
+| `confidence` | confiança do diagnóstico (0–1) |
+| `conflicting_evidence{present, cause_codes}` | ≥ 2 causas catalogadas de tipos diferentes com evidência no mesmo incidente (`cause_hits`) |
+| `repeated_failure{present, count_window, window_hours, auto_recovered_same_cause, circuit_breaker_open}` | falhas na janela do circuit breaker e quantas vezes a mesma causa foi "recuperada" (recorrência mascarada) |
+| `actions_attempted` | total de tentativas técnicas executadas/simuladas |
 
-Pré-requisitos (**HUMAN_REQUIRED**):
-- principal `service:hermes-autonomy` em `AGENT_RUN_PRINCIPALS`;
-- `project:grant` da capability `agent_run`;
-- segredo HMAC entregue pelo ambiente.
+**Quem decide:** o SAL OS (Decision Router, gate `ai`) e/ou o AI Orchestrator (`evaluateExecution`, `CostController`)
+decidem se chamam, qual perfil e com qual orçamento. A política de limiar pertence a eles, que podem mudá-la sem tocar no Hermes.
+Se decidirem chamar, o resultado (hipóteses) volta como contexto para o humano/SAL OS, e **não** amplia a matriz de
+reparo do Hermes nem dispara ação.
+
+Pré-requisitos, se a camada de decisão quiser que o próprio Hermes apareça como principal no futuro (**HUMAN_REQUIRED**):
+principal `service:hermes-autonomy` em `AGENT_RUN_PRINCIPALS`, `project:grant` com `agent_run` e segredo HMAC pelo ambiente.
 
 ## 6. Interface — contrato `AUTOMATION_INCIDENT` (só contrato)
 

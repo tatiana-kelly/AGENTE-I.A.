@@ -14,8 +14,10 @@
 
 ## Achados de segurança da auditoria (fora do escopo deste código — requer decisão da Tatiana)
 
-1. `EMAIL_AGENT_TRIGGER_SECRET` literal na skill `integrar-email-agent` — **valor removido em 18/09/2026**
-   (0 outras cópias fora de `.env*`). **Rotação: HUMAN_REQUIRED (bloqueador)** — ver `alignment-sal-os.md` §8.
+1. `EMAIL_AGENT_TRIGGER_SECRET` — removido da skill em 18/09/2026. A auditoria da Fase 2 encontrou o **mesmo valor**
+   literal em 6 funções SQL de produção (`relatorios-raw` ×1, `Gente & Gestao` ×5), no histórico do repo privado
+   `tatiana-kelly/sousaleisamar` (commit `8ed2b47`) e em 12 transcripts locais. **Rotação: HUMAN_REQUIRED (bloqueador)**,
+   com passos e locais em `hardening-phase2.md` §A.
 2. `C:\ssw-relatorios\enviar_resumo_455.py` enviava via **Resend direto** — **corrigido em 18/09/2026** para o Email Agent
    (working tree, sem commit). Pendente: envio real de teste autorizado e remoção de `RESEND_API_KEY` do `.env`.
 3. `.env` e backups `.env.bak-*` em `C:\ssw-relatorios`, `C:\Projeto ClaudeCode`, `tati-command-deck` — confirmar

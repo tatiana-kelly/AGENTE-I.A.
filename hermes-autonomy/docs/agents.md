@@ -16,7 +16,7 @@ do Hermes. Cada ação registra o `agent` responsável no `audit_log` e no ciclo
 | Risco | Ações | Execução automática |
 |---|---|---|
 | Baixo | `rerun_task`, `rerun_command`, `restart_task`, `cleanup_temp`, `validate_output` | sim, se autorizada no registry, `idempotent: true`, dentro da janela e sem circuito aberto |
-| Médio | `adjust_timeout`, `switch_endpoint` | não no MVP (`max_repair_risk: low`) |
+| Médio | `adjust_timeout`, `switch_endpoint` | **nunca** — teto fixo em código (`GOVERNANCE_MAX_RISK = "low"`), não relaxável por config |
 | Alto | `delete_data`, `alter_schema`, `rotate_credentials`, `modify_code`, `delete_files` | nunca — criar correção → testar → registrar → escalar |
 
 Ordem das travas: ação existe → janela de reparo → circuit breaker → autorizada no registry → risco →

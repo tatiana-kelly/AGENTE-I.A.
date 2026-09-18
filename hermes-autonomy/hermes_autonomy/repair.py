@@ -16,6 +16,7 @@ from .models import RISK_ORDER, CheckResult, CheckStatus, Criterion, Diagnosis, 
 from .registry import action_risk
 
 AGENT = "hermes-repair-agent"
+GOVERNANCE_MAX_RISK = "low"  # Hermes: só reparo TÉCNICO de baixo risco; nunca ação/decisão empresarial
 
 
 @dataclass
@@ -76,8 +77,11 @@ class RepairAgent:
         if action not in automation.get("allowed_recovery_actions", []):
             return RepairDecision(False, action, f"Ação '{action}' não autorizada no registry desta automação")
         risk = action_risk(action)
-        if risk == "high" or RISK_ORDER[risk] > RISK_ORDER[self.settings["max_repair_risk"]]:
-            return RepairDecision(False, action, f"Ação '{action}' é de risco {risk} — não executada no MVP")
+        # Governança (Fase 2): teto FIXO em risco baixo — não é relaxável por configuração.
+        ceiling = min(RISK_ORDER[self.settings["max_repair_risk"]], RISK_ORDER[GOVERNANCE_MAX_RISK])
+        if RISK_ORDER[risk] > ceiling:
+            return RepairDecision(False, action, f"Ação '{action}' é de risco {risk} — Hermes só executa reparo "
+                                                 "técnico de risco baixo; criar correção, testar, registrar e escalar")
         if automation.get("rerun_guard") == "no_delivery" and any(
                 e.passed and e.criterion == Criterion.DELIVERY_COMPLETED.value for e in check.evidence):
             return RepairDecision(False, action, "Entrega já realizada nesta janela — reexecutar duplicaria envio")

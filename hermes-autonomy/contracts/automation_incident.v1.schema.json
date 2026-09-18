@@ -7,7 +7,8 @@
   "additionalProperties": false,
   "required": ["schema_version", "event_type", "event_id", "source", "automation_id", "timestamp", "severity",
                "incident_type", "expected", "actual", "evidence", "diagnosis", "confidence", "actions_attempted",
-               "validation", "recurrence", "requires_human", "requires_business_decision", "authority"],
+               "validation", "recurrence", "requires_human", "requires_business_decision", "authority",
+               "ai_review_signals", "routing_context"],
   "properties": {
     "schema_version": {"const": "sal.automation-incident/1.0"},
     "event_type": {"const": "AUTOMATION_INCIDENT"},
@@ -43,7 +44,10 @@
       "type": "object", "additionalProperties": false, "required": ["run_started_at", "criteria_results"],
       "properties": {
         "run_started_at": {"type": ["string", "null"], "format": "date-time"},
-        "criteria_results": {"type": "object", "additionalProperties": {"enum": ["pass", "fail", "unverifiable"]}},
+        "criteria_results": {"type": "object",
+                             "propertyNames": {"enum": ["PROCESS_STARTED", "ON_TIME", "PROCESS_FINISHED", "OUTPUT_EXISTS",
+                                                        "OUTPUT_VALID", "DATA_UPDATED", "DELIVERY_COMPLETED", "DEPENDENCY_OK"]},
+                             "additionalProperties": {"enum": ["pass", "fail", "unverifiable"]}},
         "summary": {"type": "string"}
       }
     },
@@ -61,7 +65,10 @@
         "probable_cause": {"type": "string"},
         "cause_key": {"type": "string"},
         "transient": {"type": "boolean"},
-        "investigation_steps": {"type": "array", "items": {"type": "object"}}
+        "investigation_steps": {"type": "array", "items": {"type": "object", "additionalProperties": false,
+                                "required": ["step", "name", "result"],
+                                "properties": {"step": {"type": "string"}, "name": {"type": "string"},
+                                               "result": {"type": "string"}}}}
       }
     },
     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
@@ -101,6 +108,47 @@
         "can_approve_business_decision": {"const": false},
         "can_execute_business_action": {"const": false},
         "can_declare_business_verified": {"const": false}
+      }
+    },
+    "ai_review_signals": {
+      "type": "object", "additionalProperties": false,
+      "description": "EVIDÊNCIAS para a camada de decisão (AI Orchestrator / SAL OS) decidir se vale gastar uma chamada de IA. O Hermes NÃO decide chamar IA e NÃO emite recomendação de chamada — só fatos.",
+      "required": ["unknown_cause", "confidence", "conflicting_evidence", "repeated_failure", "actions_attempted"],
+      "properties": {
+        "unknown_cause": {"type": "boolean", "description": "diagnosis.cause_code == UNKNOWN_CAUSE."},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1, "description": "Espelho de confidence (0–1)."},
+        "conflicting_evidence": {
+          "type": "object", "additionalProperties": false, "required": ["present", "cause_codes"],
+          "properties": {"present": {"type": "boolean", "description": "≥ 2 causas catalogadas de tipos diferentes com evidência no mesmo incidente."},
+                         "cause_codes": {"type": "array", "items": {"type": "string"}}}
+        },
+        "repeated_failure": {
+          "type": "object", "additionalProperties": false, "required": ["present", "count_window", "window_hours"],
+          "properties": {"present": {"type": "boolean"}, "count_window": {"type": "integer", "minimum": 0},
+                         "window_hours": {"type": "integer", "minimum": 1},
+                         "auto_recovered_same_cause": {"type": "integer", "minimum": 0,
+                                                       "description": "Quantas vezes a mesma causa foi 'recuperada' — recorrência mascarada."},
+                         "circuit_breaker_open": {"type": "boolean"}}
+        },
+        "actions_attempted": {"type": "integer", "minimum": 0, "description": "Total de tentativas técnicas (detalhe em actions_attempted)."}
+      }
+    },
+    "routing_context": {
+      "type": "object", "additionalProperties": false,
+      "description": "Dados que o SAL OS precisa para montar um AlertEnvelope do Decision Router (o mapeamento é responsabilidade do SAL OS).",
+      "required": ["entity_type", "entity_id", "period", "registry_version", "last_success_at", "affected_outputs",
+                   "missing_data", "evidence_completeness_pct"],
+      "properties": {
+        "entity_type": {"const": "automation"},
+        "entity_id": {"type": "string"},
+        "period": {"type": "string", "description": "Data da janela esperada (YYYY-MM-DD)."},
+        "registry_version": {"type": "string", "description": "Versão/sha do registry — mapeia para rules_version."},
+        "last_success_at": {"type": ["string", "null"], "format": "date-time", "description": "Última execução com validação técnica OK — mapeia para quality_inputs.last_updated_at."},
+        "stale_hours": {"type": ["number", "null"], "minimum": 0},
+        "max_age_hours": {"type": ["number", "null"], "minimum": 0},
+        "affected_outputs": {"type": "array", "items": {"type": "string"}},
+        "missing_data": {"type": "array", "items": {"type": "string"}, "description": "Critérios não verificáveis (unverifiable)."},
+        "evidence_completeness_pct": {"type": "number", "minimum": 0, "maximum": 100}
       }
     },
     "audit_ref": {"type": "string", "description": "Referência ao audit_log técnico local do Hermes (ex.: incident_id)."}
