@@ -28,6 +28,7 @@ from app.agent_bridge.client import (
     build_investigation_request,
 )
 from app.agent_bridge.contract import (
+    AgentAuthority,
     AgentRunResult,
     ConsolidationSource,
     Evidence,
@@ -52,6 +53,8 @@ from app.decision_router.contract import DecisionRoute
 CONSOLIDATION_AGENT = "consolidacao"
 CORRECTION_ROUNDS = 1
 CASE_BUDGET_USD = 3.50
+#: Autoridade dos agentes (decisão da Tatiana, 2026-09-19): concluir e RECOMENDAR ações; aprovar/executar nunca.
+AGENT_AUTHORITY = AgentAuthority(can_recommend=True, can_propose=True)
 _INVESTIGATION_ROUTES = {"ONE_AGENT", "MULTI_AGENT"}
 
 
@@ -175,6 +178,10 @@ def consolidate_disciplined(outcomes: tuple[AgentOutcome, ...], evidence: tuple[
         missing_data=tuple(missing),
         evidence=tuple(evidence_ids),
         confidence=confidence,
+        recommended_actions=tuple(
+            action.model_copy(update={"action": f"[{agent}] {action.action}"})
+            for agent, output in outputs for action in (output.recommended_actions or ())
+        ) or None,
     )
     items = tuple(item for _, d in disciplined for item in d.items) + tuple(
         EpistemicItem("divergencia", d.render(), f"{d.agent_a}+{d.agent_b}", tuple(dict.fromkeys(d.evidence_a + d.evidence_b)),
@@ -209,6 +216,7 @@ class MultiAgentInvestigation:
         business_data: dict | None = None,
         correction_rounds: int = 0,
         case_budget_usd: float | None = None,
+        authority: AgentAuthority | None = None,
     ) -> MultiAgentResult:
         """Executa o caso. `correction_rounds` e `case_budget_usd` vêm da política (CORRECTION_ROUNDS, CASE_BUDGET_USD);
         o padrão 0/None mantém o comportamento anterior para chamadores que não os informam."""
@@ -238,7 +246,7 @@ class MultiAgentInvestigation:
                 task=task, context_files=context_files, evidence=evidence, attempt=run_attempt,
                 limits=run_limits or limits, business_data=business_data, previous_results=previous,
                 # a revisão acontece sobre o conjunto consolidado — não por agente
-                review=ReviewPolicy(required=False, max_correction_attempts=0),
+                review=ReviewPolicy(required=False, max_correction_attempts=0), authority=authority,
             )
             if run_limits is None:
                 return AgentOutcome(agent=agent, status="failed", request_id=request.request_id,
@@ -277,7 +285,8 @@ class MultiAgentInvestigation:
                 config=self._config, case_id=case_id, fingerprint=fingerprint, agent=CONSOLIDATION_AGENT,
                 agent_version="1.0.0", task=f"{review_task}\n{REVIEW_CHECKLIST}", context_files=context_files,
                 evidence=evidence, attempt=run_attempt, limits=run_limits, business_data=business_data,
-                review=ReviewPolicy(required=True, max_correction_attempts=0),
+                # mesma autoridade dos agentes: a consolidação carrega as ações que ELES recomendaram
+                review=ReviewPolicy(required=True, max_correction_attempts=0), authority=authority,
             ).model_copy(update={"review_target": ReviewTarget(
                 output=consolidated,
                 author_providers=authors,

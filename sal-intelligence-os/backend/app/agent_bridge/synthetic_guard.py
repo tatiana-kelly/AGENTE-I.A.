@@ -8,7 +8,7 @@ SyntheticGuardViolation e o provider NÃO é chamado:
 - tamanho do corpo dentro do limite do contrato;
 - orçamento dentro dos limites aprovados (por chamada e por job);
 - contexto pedido é subconjunto do contexto autorizado;
-- autoridade do agente toda False.
+- aprovar/executar sempre False (recomendar/propor é permitido desde 2026-09-19).
 """
 
 import json
@@ -62,8 +62,9 @@ def validate_synthetic_request(request: AgentRunRequest, policy: SyntheticGuardP
     extra_context = sorted(set(request.authorized_context.files) - policy.authorized_context)
     if extra_context:
         problems.append(f"contexto fora do autorizado: {extra_context}")
-    if any(request.agent_authority.model_dump().values()):
-        problems.append("autoridade do agente diferente de false")
+    authority = request.agent_authority
+    if authority.can_approve or authority.can_execute:  # recomendar/propor é permitido desde 2026-09-19
+        problems.append("autoridade de aprovar/executar diferente de false")
     if problems:
         raise SyntheticGuardViolation("; ".join(problems))
 

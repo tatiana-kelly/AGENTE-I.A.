@@ -87,6 +87,17 @@ class Hypothesis(_Closed):
     confidence: float = Field(ge=0, le=100)
 
 
+class RecommendedAction(_Closed):
+    """Ação RECOMENDADA (decisão da Tatiana, 2026-09-19). Recomendar não é aprovar nem executar."""
+
+    action: str
+    owner_role: str
+    deadline: str
+    kpi: str
+    evidence: tuple[str, ...] = ()
+    risk_of_inaction: str = ""
+
+
 class InvestigationOutput(_Closed):
     """Insumo de investigação. Não possui campo de decisão, ação ou resultado verificado — por construção."""
 
@@ -98,6 +109,8 @@ class InvestigationOutput(_Closed):
     missing_data: tuple[str, ...] = ()
     evidence: tuple[str, ...] = ()
     confidence: float = Field(ge=0, le=100)
+    # opcional: só aparece quando o agente foi autorizado a recomendar (agent_authority.can_recommend)
+    recommended_actions: tuple[RecommendedAction, ...] | None = None
 
 
 class ConsolidationSource(_Closed):

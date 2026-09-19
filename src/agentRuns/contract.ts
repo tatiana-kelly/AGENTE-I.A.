@@ -91,6 +91,22 @@ export const reviewPolicySchema = z
   .strict();
 
 /**
+ * Ação RECOMENDADA (decisão da Tatiana, 2026-09-19): o agente pode dizer o que deve ser feito, por quem e como
+ * medir. Recomendar não é aprovar nem executar — isso continua exclusivo de uma pessoa, via SAL OS.
+ * Só é aceita quando o request traz agent_authority.can_recommend=true.
+ */
+export const recommendedActionSchema = z
+  .object({
+    action: z.string().min(1).max(1000),
+    owner_role: z.string().min(1).max(200),
+    deadline: z.string().min(1).max(200),
+    kpi: z.string().min(1).max(500),
+    evidence: z.array(z.string().max(500)).default([]),
+    risk_of_inaction: z.string().max(1000).default(""),
+  })
+  .strict();
+
+/**
  * Contrato de saída da investigação. FATO ≠ CÁLCULO ≠ INFERÊNCIA ≠ HIPÓTESE, conforme
  * .claude/rules/diagnostic-quality.md do SAL OS. Autoridade de decisão não existe aqui.
  */
@@ -116,6 +132,8 @@ export const investigationOutputSchema = z
     missing_data: z.array(z.string().max(1000)),
     evidence: z.array(z.string().max(500)),
     confidence: z.number().min(0).max(100),
+    // opcional e aditivo: saídas sem o campo continuam válidas em sal.investigation-output/1.0
+    recommended_actions: z.array(recommendedActionSchema).max(20).optional(),
   })
   .strict();
 

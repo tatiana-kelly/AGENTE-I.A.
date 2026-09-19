@@ -341,3 +341,61 @@ def test_sem_politica_o_comportamento_anterior_e_mantido():
     client = FakeClient()
     result = _run(client)
     assert result.corrections == () and len(client.requests) == 3 and result.case_budget_usd is None
+
+
+# ── Autoridade de recomendar (decisão da Tatiana, 2026-09-19) ─────────────────────────────────────────────
+from app.agent_bridge.multi_agent import AGENT_AUTHORITY
+from app.agent_bridge.synthetic_guard import (
+    SyntheticGuardPolicy,
+    validate_synthetic_request,
+)
+
+ACTION = {"action": "Revisar a frequência da perna de retorno", "owner_role": "gestor de transferência", "deadline": "7 dias",
+          "kpi": "ocupação por peso >= 50%", "evidence": ["ev-sint"], "risk_of_inaction": "custo por kg segue alto"}
+
+
+class RecommendingClient(FakeClient):
+    def run(self, request, **kwargs):
+        self.requests.append(request)
+        if request.review_target is not None:
+            return _result(request, status="needs_human", output=request.review_target.output.model_dump(mode="json"),
+                           provider="openai", review={"required": True, "reviewed": True, "status": "REJECTED",
+                                                      "reviewer": "openai", "corrections": 0, "summary": "ok"})
+        return _result(request, output={**_output(request.agent, 40), "recommended_actions": [ACTION]})
+
+
+def test_agentes_e_revisao_recebem_autoridade_de_recomendar_e_nunca_de_executar():
+    client = RecommendingClient()
+    result = MultiAgentInvestigation(client, CONFIG).run(
+        route=_route(), case_id="caso-sintetico", task_by_agent={}, default_task="Investigue.", context_files=("ARCHITECTURE.md",),
+        evidence=EVIDENCE, limits=LIMITS, review_task="Revise.", authority=AGENT_AUTHORITY)
+    assert all(r.agent_authority.can_recommend and r.agent_authority.can_propose for r in client.requests)
+    assert not any(r.agent_authority.can_approve or r.agent_authority.can_execute for r in client.requests)
+    actions = result.consolidated.recommended_actions
+    assert [a.action for a in actions] == ["[investigador] Revisar a frequência da perna de retorno",
+                                           "[transferencia] Revisar a frequência da perna de retorno"]
+    assert client.requests[-1].review_target.output.recommended_actions == actions  # o revisor vê as ações
+    assert any(item.kind == "acao_recomendada" for item in result.items)
+
+
+def test_sem_autoridade_nada_muda_e_consolidacao_nao_ganha_campo():
+    result = _run(FakeClient())
+    assert result.consolidated.recommended_actions is None
+    assert "recommended_actions" not in result.consolidated.model_dump(exclude_none=True)
+
+
+def test_trava_sintetica_aceita_recomendar_e_bloqueia_executar():
+    from pydantic import ValidationError
+
+    from app.agent_bridge.client import build_investigation_request
+    from app.agent_bridge.contract import AgentAuthority, Evidence
+    ev = (Evidence(**{**EVIDENCE[0].model_dump(), "filters": {"synthetic_test": True}}),)
+    policy = SyntheticGuardPolicy(real_markers=frozenset(), authorized_context=frozenset({"ARCHITECTURE.md"}),
+                                  max_cost_usd_per_call=1, max_cost_usd_per_job=3)
+    def req(authority):
+        return build_investigation_request(config=CONFIG, case_id="c", fingerprint="f", agent="investigador", agent_version="1.0.0",
+                                           task="t", context_files=("ARCHITECTURE.md",), evidence=ev, limits=LIMITS,
+                                           business_data={"synthetic_test": True}, authority=authority)
+    validate_synthetic_request(req(AGENT_AUTHORITY), policy)
+    with pytest.raises(ValidationError):
+        req(AgentAuthority(can_recommend=True, can_execute=True))  # nem chega a ser montado: Literal[False]

@@ -321,3 +321,38 @@ describe("Fase 5G — contrato de saída explícito e rejeição rastreável", (
     expect((outcome.body as AgentRunResponse).output_validation.reason).toContain("facts.0: Expected string, received object");
   });
 });
+
+describe("Ações recomendadas (decisão da Tatiana, 2026-09-19): recomendar sim, aprovar/executar não", () => {
+  const ACTION = { action: "Revisar a frequência da perna de retorno", owner_role: "gestor de transferência", deadline: "7 dias",
+    kpi: "ocupação por peso ≥ 50%", evidence: ["ev-a"], risk_of_inaction: "custo por kg segue alto" };
+  const recommend = { can_recommend: true, can_propose: true, can_approve: false, can_execute: false } as const;
+
+  it("com can_recommend=true, as ações recomendadas passam e o contrato explica o formato", async () => {
+    const anthropic = new Scripted("anthropic", [JSON.stringify({ ...OUTPUT, recommended_actions: [ACTION] })]);
+    const outcome = await post(await deps([anthropic], {}, { allowedProviders: ["anthropic"] }), request({ agent_authority: recommend }));
+    const body = outcome.body as AgentRunResponse;
+    expect(body.status).toBe("succeeded");
+    expect(body.output?.recommended_actions).toEqual([ACTION]);
+    expect(anthropic.inputs[0]!.prompt).toContain('"recommended_actions"');
+    expect(anthropic.inputs[0]!.prompt).toContain("Recomendar NÃO é aprovar nem executar");
+  });
+
+  it("sem can_recommend, ação recomendada é rejeitada e o prompt proíbe o campo", async () => {
+    const anthropic = new Scripted("anthropic", [JSON.stringify({ ...OUTPUT, recommended_actions: [ACTION] })]);
+    const outcome = await post(await deps([anthropic], {}, { allowedProviders: ["anthropic"] }), request());
+    const body = outcome.body as AgentRunResponse;
+    expect(outcome.status).toBe(422);
+    expect(body.output_validation.reason).toContain("sem agent_authority.can_recommend");
+    expect(anthropic.inputs[0]!.prompt).toContain("Não inclua recommended_actions");
+  });
+
+  it("aprovar e executar continuam impossíveis mesmo com can_recommend", async () => {
+    const anthropic = new Scripted("anthropic", [JSON.stringify({ ...OUTPUT, recommended_actions: [{ ...ACTION, execute_action: true }] })]);
+    const outcome = await post(await deps([anthropic], {}, { allowedProviders: ["anthropic"] }), request({ agent_authority: recommend }));
+    expect(outcome.status).toBe(422);
+    expect((outcome.body as AgentRunResponse).output_validation.reason).toContain("autoridade do SAL OS");
+    const denied = await post(await deps([new Scripted("anthropic", [JSON.stringify(OUTPUT)])]),
+      request({ agent_authority: { ...recommend, can_execute: true } as never }));
+    expect(denied.status).toBe(400);
+  });
+});

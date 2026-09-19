@@ -119,6 +119,14 @@ const OUTPUT_TYPES =
   "Cada item de facts, calculations, inferences, contradictions, missing_data e evidence é UMA STRING (texto). " +
   "Não use objetos nem listas aninhadas nesses campos. confidence é número de 0 a 100.";
 
+/** Só entra no contrato quando o request autoriza recomendar (agent_authority.can_recommend=true). */
+const RECOMMENDATION_CONTRACT = [
+  "Você PODE recomendar ações no campo adicional \"recommended_actions\": lista (máx. 20) de objetos",
+  '{"action": "<verbo + objeto>", "owner_role": "<papel responsável>", "deadline": "<prazo>", "kpi": "<KPI de sucesso>",',
+  ' "evidence": ["<id da evidência>"], "risk_of_inaction": "<risco de não agir>"}.',
+  "Recomende só o que a evidência sustenta. Recomendar NÃO é aprovar nem executar: isso é de uma pessoa.",
+].join("\n");
+
 export interface ProviderPayload {
   system: string;
   prompt: string;
@@ -214,6 +222,7 @@ export function buildProviderPayload(
     "Responda SOMENTE com um JSON válido exatamente neste formato:",
     OUTPUT_SHAPE,
     OUTPUT_TYPES,
+    authority.can_recommend ? RECOMMENDATION_CONTRACT : "Não inclua recommended_actions: esta execução não autoriza recomendar.",
     "Campos proibidos: approved_decision, execute_action, verified_ok.",
     "[/OUTPUT CONTRACT]",
   ]

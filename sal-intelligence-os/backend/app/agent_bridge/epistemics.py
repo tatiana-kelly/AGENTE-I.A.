@@ -28,6 +28,7 @@ CERTAINTY = {
     "contradicao": "em conflito com a evidência ou entre agentes",
     "dado_ausente": "ausente",
     "divergencia": "divergência entre agentes, não resolvida",
+    "acao_recomendada": "recomendação; aprovar e executar são de uma pessoa",
 }
 #: Ordem de certeza. Uma regra só pode mover um item para um nível MENOR.
 RANK = {"fato": 3, "calculo": 3, "inferencia": 2, "hipotese": 1, "contradicao": 0}
@@ -390,8 +391,12 @@ def discipline(output: InvestigationOutput, agent: str, evidence: tuple[Evidence
     disciplined = InvestigationOutput(
         facts=tuple(buckets["fato"]), calculations=tuple(buckets["calculo"]), inferences=tuple(buckets["inferencia"]),
         hypotheses=tuple(hypotheses), contradictions=tuple(buckets["contradicao"]), missing_data=tuple(missing),
-        evidence=output.evidence, confidence=confidence,
+        evidence=output.evidence, confidence=confidence, recommended_actions=output.recommended_actions,
     )
+    for action in output.recommended_actions or ():  # recomendação: registrada como tal, nunca como fato
+        items.append(EpistemicItem("acao_recomendada", action.action, agent, tuple(action.evidence),
+                                   CERTAINTY["acao_recomendada"],
+                                   () if action.evidence else ("ação recomendada sem evidência citada",)))
     return DisciplinedOutput(disciplined, tuple(items), reclassified, basis)
 
 

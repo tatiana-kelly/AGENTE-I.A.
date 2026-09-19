@@ -549,6 +549,16 @@ export async function executeAgentRun(
     });
   }
 
+  // recomendar exige autorização explícita do request; sem ela, a saída tenta exercer autoridade que não tem
+  if (!request.agent_authority.can_recommend && (validated.data.recommended_actions?.length ?? 0) > 0) {
+    return finish({
+      ...baseResponse,
+      status: "rejected_output",
+      review,
+      output_validation: { valid: false, reason: "Output trouxe recommended_actions sem agent_authority.can_recommend." },
+    });
+  }
+
   const finalStatus: AgentRunStatus =
     request.review_policy.required && review.status !== "APPROVED" ? "needs_human" : "succeeded";
   return finish({

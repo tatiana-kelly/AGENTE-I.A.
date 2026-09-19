@@ -22,6 +22,7 @@ import httpx
 
 from app.agent_bridge.contract import (
     PROTOCOL_VERSION,
+    AgentAuthority,
     AgentRunRequest,
     AgentRunResult,
     AuthorizedContext,
@@ -190,6 +191,7 @@ def build_investigation_request(
     previous_results: tuple[str, ...] = (),
     limits: ExecutionLimits = DEFAULT_LIMITS,
     review: ReviewPolicy | None = None,
+    authority: AgentAuthority | None = None,
 ) -> AgentRunRequest:
     return AgentRunRequest(
         request_id=str(uuid.uuid4()),
@@ -207,6 +209,7 @@ def build_investigation_request(
         execution_limits=limits,
         output_contract=OutputContract(),
         review_policy=review or ReviewPolicy(),
+        agent_authority=authority or AgentAuthority(),
     )
 
 
