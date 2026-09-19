@@ -162,6 +162,17 @@ def _default_metrics() -> dict[str, MetricPolicy]:
             specialists=("financeiro-dre", "custos-orcamento-roi"),
             missing_evidence_on_quality=("DRE real por filial/linha",),
         ),
+        # escopo aprovado pela Tatiana em 2026-09-19: realizado × orçado por linha analítica (Pareto 70%)
+        "dre-linha-realizado-vs-orcado": MetricPolicy(
+            metric_id="dre-linha-realizado-vs-orcado",
+            case_type="dre_margin_cash",
+            mapping_confidence="ALTA",
+            mapping_confirmed=True,
+            granularity="monthly",
+            band_kind="engine_category",
+            mapping_ref="adapters/dre_payload.py (payload publicado do DRE; impacto = sinal_ebitda × (REALIZADO − ORCADO))",
+            specialists=("financeiro-dre", "custos-orcamento-roi"),
+        ),
         "ocupacao-transferencia": MetricPolicy(
             metric_id="ocupacao-transferencia",
             case_type="transfer",

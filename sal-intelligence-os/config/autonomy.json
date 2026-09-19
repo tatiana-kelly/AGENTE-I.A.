@@ -5,7 +5,7 @@
   "case_budget_usd": 3.5,
   "projects": {
     "torre-controle": true,
-    "dre": false,
+    "dre": true,
     "rota-people": false,
     "produtividade": false
   }

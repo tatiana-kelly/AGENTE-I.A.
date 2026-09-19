@@ -21,6 +21,9 @@ agents:
   files:
     - investigador.md
     - transferencia.md
+    - financeiro-dre.md
+    - custos-orcamento-roi.md
+    - entrega.md
 
 access:
   default: read_only

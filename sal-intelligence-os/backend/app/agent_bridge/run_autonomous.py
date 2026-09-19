@@ -21,6 +21,7 @@ from app.agent_bridge.autonomy import AutonomyGate, AutonomyPolicy, DailyLedger
 from app.agent_bridge.contract import AgentRunResult
 from app.agent_bridge.declared_evidence import load_declarations
 from app.decision_router.adapters import (
+    dre_payload,
     torre_apuracao,
     torre_clientes,
     torre_custos,
@@ -45,6 +46,8 @@ PROJECTS = {
         "data_dir": r"C:\Projeto ClaudeCode\Torre-de-Controle\data",
         "modules": (torre_transferencias, torre_custos, torre_apuracao, torre_clientes, torre_divergencia, torre_projecao),
     },
+    # só o payload publicado (realizado × orçado por linha); nada de lançamentos, folha ou linhas restritas
+    "dre": {"data_dir": r"C:\DRE - Demonstrativo de Resultado\app\web\public", "modules": (dre_payload,)},
 }
 
 
