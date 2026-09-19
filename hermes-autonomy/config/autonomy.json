@@ -18,7 +18,7 @@
     "channels": ["outbox"],
     "external_enabled": false,
     "immediate_min_priority": "P1",
-    "email_agent": {"path": "C:\\CENTRO-DE-AGENTES-IA", "recipient": null},
+    "email_agent": {"path": "C:\\CENTRO-DE-AGENTES-IA", "recipient": "tatiana@salexpress.com.br"},
     "dedupe_hours": 12
   },
   "report": {"title": "HERMES AUTOMATION HEALTH"},

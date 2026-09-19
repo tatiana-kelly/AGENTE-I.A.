@@ -52,6 +52,28 @@ def daily_report(store, automations: list[dict[str, Any]], settings, day: dateti
             f"- [{i['priority']}] {names.get(i['automation_id'], i['automation_id'])}: "
             f"{i['human_action'] or i['probable_cause'] or i['type']} ({i['id']})" for i in pending[:15]) or "nenhuma"),
     ]
-    return {"text": "\n\n".join(lines), "counts": {
+    # E-mail diário (decisão da Tatiana, 2026-09-19): UM e-mail, só com o que NÃO rodou e NÃO foi corrigido.
+    unresolved: dict[str, dict[str, Any]] = {}
+    for i in pending:
+        unresolved.setdefault(i["automation_id"], {"priority": i["priority"], "cause": i["probable_cause"] or i["type"],
+                                                   "action": i["human_action"], "incident": i["id"]})
+    for a in monitored:
+        check = latest.get(a["id"], {})
+        if check.get("status") == "INCIDENT" and check.get("incident_type") != "DELAYED_EXECUTION":
+            unresolved.setdefault(a["id"], {"priority": check.get("priority") or "P2",
+                                            "cause": check.get("incident_type") or "falha na última verificação",
+                                            "action": None, "incident": check.get("incident_id")})
+    email = [f"Automações que não rodaram em {start:%d/%m/%Y} e o Hermes NÃO conseguiu corrigir: {len(unresolved)}",
+             f"(monitoradas: {len(monitored)} · corrigidas sozinhas: {recovered}"
+             f"{f' · sem evidência verificável: {no_evidence}' if no_evidence else ''})"]
+    if unresolved:
+        email += [f"{n}. [{u['priority']}] {names.get(aid, aid)} — {u['cause']}"
+                  + (f"\n   O que fazer: {u['action']}" if u["action"] else "")
+                  + (f"\n   Incidente: {u['incident']}" if u["incident"] else "")
+                  for n, (aid, u) in enumerate(sorted(unresolved.items(), key=lambda kv: kv[1]["priority"]), 1)]
+    else:
+        email.append("Nenhuma pendência: tudo rodou ou foi corrigido automaticamente.")
+
+    return {"text": "\n\n".join(lines), "email_text": "\n".join(email), "unresolved": sorted(unresolved), "counts": {
         "monitored": len(monitored), "success": success, "auto_recovered": recovered, "delayed": delayed,
         "failed": failed, "escalated": len(escalated), "insufficient_evidence": no_evidence}}

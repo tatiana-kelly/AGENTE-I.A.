@@ -20,7 +20,7 @@ Atalho: `$ha = "$env:LOCALAPPDATA\hermes\autonomy\app\ha.py"` e depois `python $
 ## Rotina
 
 - A cada 30 min: `hermes-autonomy-guardian` (tick). Silencioso quando tudo está OK.
-- 18:00: `hermes-autonomy-daily-report` (HERMES AUTOMATION HEALTH).
+- 10:00: `hermes-autonomy-daily-report` (HERMES AUTOMATION HEALTH).
 - P0/P1 e "ação necessária": alerta imediato (outbox; canais externos se habilitados).
 
 ## Event-driven (opcional, sem alterar automações agora)

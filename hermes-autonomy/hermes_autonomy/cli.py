@@ -128,8 +128,11 @@ def cmd_report(args) -> int:
     report = daily_report(orch.store, orch.automations, settings, day)
     if args.send:
         stamp = (day or now_local()).strftime("%Y-%m-%d")
-        result = orch.notifier.notify(Notification(kind="daily_report", subject=f"HERMES — Daily Automation Health {stamp}",
-                                                   body=report["text"], priority="P3", dedupe_key=f"daily:{stamp}",
+        # e-mail só com o que não rodou e não foi corrigido; o relatório completo segue no terminal/arquivo
+        pending = len(report["unresolved"])
+        result = orch.notifier.notify(Notification(kind="daily_report",
+                                                   subject=f"HERMES — {pending} automação(ões) sem correção em {stamp}",
+                                                   body=report["email_text"], priority="P3", dedupe_key=f"daily:{stamp}",
                                                    tag="RESUMO DIÁRIO"))
         if not args.hermes:
             print(report["text"])

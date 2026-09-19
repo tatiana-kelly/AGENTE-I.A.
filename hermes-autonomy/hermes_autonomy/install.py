@@ -13,7 +13,7 @@ from .config import PACKAGE_ROOT
 
 JOBS = {
     "hermes-autonomy-guardian": ("every 30m", "hermes_autonomy_tick.py", ["tick", "--hermes"]),
-    "hermes-autonomy-daily-report": ("0 18 * * *", "hermes_autonomy_report.py", ["report", "--send"]),
+    "hermes-autonomy-daily-report": ("0 10 * * *", "hermes_autonomy_report.py", ["report", "--send"]),
 }
 WRAPPER = '''"""Gerado por hermes_autonomy install — não editar (fonte: AGENTE-I.A/hermes-autonomy)."""
 import sys

@@ -37,7 +37,7 @@ Instalado no Hermes: `python "%LOCALAPPDATA%\hermes\autonomy\app\ha.py" <comando
 |---|---|
 | Modo | `DRY_RUN=true`, `AUTONOMOUS_REPAIR=false` (nada em produção é alterado) |
 | Automações no registry | 38 (30 supervisionadas, 8 desabilitadas catalogadas) |
-| Cron Hermes | `hermes-autonomy-guardian` (30 min) e `hermes-autonomy-daily-report` (18:00) |
+| Cron Hermes | `hermes-autonomy-guardian` (30 min) e `hermes-autonomy-daily-report` (10:00) |
 | Disparo automático | **pendente de decisão** — gateway Hermes parado; ver `docs/operations.md` → "Relógio do cron" |
 | Notificação externa | desligada (outbox local) — decisão de canal em `docs/configuration.md` |
 

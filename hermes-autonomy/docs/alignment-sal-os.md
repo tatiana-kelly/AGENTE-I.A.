@@ -72,7 +72,7 @@ Legenda: **KEEP_HERMES** · **REUSE_EXISTING** · **SHARED_INTERFACE** · **DUPL
 
 ## 3. Scheduler
 
-Continua o cron nativo do Hermes (`hermes-autonomy-guardian` a cada 30 min, `hermes-autonomy-daily-report` às 18:00).
+Continua o cron nativo do Hermes (`hermes-autonomy-guardian` a cada 30 min, `hermes-autonomy-daily-report` às 10:00).
 Não existe e não será criado outro scheduler. As automações continuam no Agendador do Windows, onde já estavam; o Hermes só observa.
 Falta decidir o gatilho do cron Hermes (ticker `hermes cron tick` ou gateway) — **HUMAN_REQUIRED**, sem mudança.
 

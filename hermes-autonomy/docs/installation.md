@@ -20,7 +20,7 @@ python -m hermes_autonomy install             # idempotente
 3. publica as Skills em `%LOCALAPPDATA%\hermes\skills\autonomy\`;
 4. cria (se não existirem) os cron jobs nativos:
    - `hermes-autonomy-guardian` — `every 30m`, `--no-agent`, `--deliver local`
-   - `hermes-autonomy-daily-report` — `0 18 * * *`, `--no-agent`, `--deliver local`
+   - `hermes-autonomy-daily-report` — `0 10 * * *`, `--no-agent`, `--deliver local`
 
 Alterou código ou registry? Rode `install` de novo — é assim que a cópia do Hermes é atualizada
 (mesma convenção dos agentes globais: edita na fonte, recopia).
