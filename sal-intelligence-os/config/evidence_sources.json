@@ -1,0 +1,81 @@
+{
+  "_doc": "Evidência declarada por fonte (app/agent_bridge/declared_evidence.py). LISTA FECHADA: só os campos abaixo saem para os agentes. Excluídos de propósito: classificação, causa, hipótese, descrição, prioridade, score, recomendação, decisão preliminar e confiança do motor (conclusões) e qualquer nome de pessoa ou cliente. Unidade 'a confirmar' = o código não deixa claro; a IA recebe essa limitação. Fontes do transferencias_investigacao usam o montador dedicado (evidence.py).",
+  "torre.conferir_apuracao_custo": {
+    "materiality_unit": "R$",
+    "limitations": ["alerta do card de apuração de custo: valor total da divergência, sem o detalhamento por categoria"],
+    "fields": {
+      "em": {"significado": "data/hora em que o alerta de divergência foi registrado", "unidade": "data-hora"},
+      "delta_total": {"significado": "diferença total entre a Torre e a apuração de custo no alerta", "unidade": "R$"}
+    }
+  },
+  "torre.reconciliacao_torre_apuracao": {
+    "materiality_unit": "R$",
+    "limitations": ["reconciliação por categoria de custo; 'campo' é o nome do campo comparado"],
+    "fields": {
+      "categoria": {"significado": "categoria de custo reconciliada", "unidade": "texto (dimensão)"},
+      "campo": {"significado": "campo comparado entre Torre e apuração", "unidade": "texto (dimensão)"},
+      "torre": {"significado": "valor da categoria na Torre", "unidade": "R$"},
+      "apuracao": {"significado": "valor da categoria na apuração de custo", "unidade": "R$"},
+      "delta": {"significado": "torre − apuracao", "unidade": "R$"},
+      "delta_pct": {"significado": "delta em relação à apuração", "unidade": "%"}
+    }
+  },
+  "torre.motor_snapshot_painel:custo-por-cte-base": {
+    "materiality_unit": "R$",
+    "limitations": ["métricas da base no período do snapshot do painel; kpi_performance = 0 significa KPI ausente"],
+    "fields": {
+      "sigla": {"significado": "sigla da base (filial)", "unidade": "texto (dimensão)"},
+      "custo": {"significado": "custo total da base no período", "unidade": "R$"},
+      "qtd_ctes": {"significado": "quantidade de CT-e emitidos pela base no período", "unidade": "CT-e"},
+      "custo_cte": {"significado": "custo ÷ qtd_ctes", "unidade": "R$/CT-e"},
+      "custo_kg": {"significado": "custo ÷ peso_total", "unidade": "R$/kg"},
+      "peso_total": {"significado": "peso total movimentado pela base no período", "unidade": "kg"},
+      "custo_cte_mes_ant": {"significado": "custo por CT-e da base no mês anterior", "unidade": "R$/CT-e"},
+      "delta_custo_pct": {"significado": "variação do custo por CT-e contra o mês anterior", "unidade": "%"},
+      "kpi_performance": {"significado": "KPI de performance operacional da base (0 = ausente)", "unidade": "a confirmar"},
+      "delta_perf_pp": {"significado": "variação do KPI de performance contra o período anterior", "unidade": "p.p."},
+      "alerta_cte_ref": {"significado": "referência de alerta de custo por CT-e usada pelo motor", "unidade": "R$/CT-e"}
+    }
+  },
+  "torre.motor_snapshot_painel:custo-performance-base": {
+    "materiality_unit": "R$",
+    "limitations": ["métricas da base no período do snapshot do painel; kpi_performance = 0 significa KPI ausente"],
+    "fields": {
+      "sigla": {"significado": "sigla da base (filial)", "unidade": "texto (dimensão)"},
+      "custo": {"significado": "custo total da base no período", "unidade": "R$"},
+      "qtd_ctes": {"significado": "quantidade de CT-e emitidos pela base no período", "unidade": "CT-e"},
+      "custo_cte": {"significado": "custo ÷ qtd_ctes", "unidade": "R$/CT-e"},
+      "custo_kg": {"significado": "custo ÷ peso_total", "unidade": "R$/kg"},
+      "peso_total": {"significado": "peso total movimentado pela base no período", "unidade": "kg"},
+      "custo_cte_mes_ant": {"significado": "custo por CT-e da base no mês anterior", "unidade": "R$/CT-e"},
+      "delta_custo_pct": {"significado": "variação do custo por CT-e contra o mês anterior", "unidade": "%"},
+      "kpi_performance": {"significado": "KPI de performance operacional da base (0 = ausente)", "unidade": "a confirmar"},
+      "delta_perf_pp": {"significado": "variação do KPI de performance contra o período anterior", "unidade": "p.p."}
+    }
+  },
+  "torre.divergencia_rota_ssw_bi": {
+    "materiality_unit": "a confirmar",
+    "limitations": ["o motor não declara a unidade de oficial_ssw e bi (mesma grandeza nos dois); confirmar antes de concluir sobre valor"],
+    "fields": {
+      "rota": {"significado": "rota (origem→destino)", "unidade": "texto (dimensão)"},
+      "oficial_ssw": {"significado": "valor da rota no relatório oficial do SSW", "unidade": "a confirmar"},
+      "bi": {"significado": "valor da rota no BI", "unidade": "a confirmar"},
+      "delta": {"significado": "oficial_ssw − bi", "unidade": "a confirmar"},
+      "delta_pct": {"significado": "delta em relação ao BI", "unidade": "%"},
+      "n_ctrbs": {"significado": "quantidade de CTRBs (manifestos) envolvidos na divergência", "unidade": "CTRB"}
+    }
+  },
+  "torre.orquestrador_projecao": {
+    "materiality_unit": "kg",
+    "limitations": ["projeção do mês pelo orquestrador; projecao_kg é estimativa do motor, não medida"],
+    "fields": {
+      "base": {"significado": "base (filial)", "unidade": "texto (dimensão)"},
+      "peso_atual_kg": {"significado": "peso realizado no mês até a data", "unidade": "kg"},
+      "peso_mes_ant_kg": {"significado": "peso realizado no mês anterior", "unidade": "kg"},
+      "variacao_pct": {"significado": "variação do peso contra o mês anterior", "unidade": "%"},
+      "aceleracao_pct": {"significado": "aceleração do peso calculada pelo motor", "unidade": "%"},
+      "projecao_kg": {"significado": "projeção de peso do mês calculada pelo motor (estimativa)", "unidade": "kg"},
+      "ocupacao_media_rotas_pct": {"significado": "ocupação média das rotas da base", "unidade": "%"}
+    }
+  }
+}

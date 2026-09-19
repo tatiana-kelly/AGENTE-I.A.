@@ -130,7 +130,8 @@ REVIEW_CHECKLIST = (
 
 def _author_provider(result: AgentRunResult) -> str | None:
     authored = [item for item in result.usage if item.get("role") in ("author", "correction") and item.get("outcome", "success") == "success"]
-    return str(authored[-1]["provider"]) if authored else None
+    provider = authored[-1].get("provider") if authored else None
+    return str(provider) if provider else None  # sem provider informado = autoria desconhecida (fail-closed na revisão)
 
 
 def consolidate_disciplined(outcomes: tuple[AgentOutcome, ...], evidence: tuple[Evidence, ...] = ()) -> Consolidation | None:
