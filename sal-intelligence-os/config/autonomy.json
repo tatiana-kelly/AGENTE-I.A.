@@ -1,0 +1,12 @@
+{
+  "_doc": "Freios do modo autônomo dos agentes (app/agent_bridge/autonomy.py). Decisão da Tatiana em 2026-09-19: teto de US$ 10/dia somando todos os projetos, US$ 3,50 por caso. 'enabled' começa false: ligar é a ativação e exige aprovação. Projeto só vira true depois do contexto validado.",
+  "enabled": false,
+  "daily_budget_usd": 10.0,
+  "case_budget_usd": 3.5,
+  "projects": {
+    "torre-controle": true,
+    "dre": false,
+    "rota-people": false,
+    "produtividade": false
+  }
+}
