@@ -1,0 +1,157 @@
+--- a/baixar_dres_local.py
++++ b/baixar_dres_local.py
+@@ -24,6 +24,12 @@
+ Rodar:  python baixar_dres_local.py
+ Idempotente: pula o que ja existe com o mesmo tamanho.
+ Variaveis opcionais: DRE_DEST (espelho tecnico) e DRE_DEST_TRABALHO.
++
++PUSH SO COM APROVACAO (19/09/2026): por padrao a rotina faz so o commit LOCAL
++dos DREs baixados e registra "push pendente de aprovacao" em
++git_publicacao.log (ao lado do script). O push para o GitHub so acontece com
++DRE_BRIDGE_ALLOW_PUSH=1 -- desligado por padrao, e nao deve ser ligado na
++tarefa agendada: push exige aprovacao humana explicita a cada vez.
+ """
+ import base64
+ import json
+@@ -44,36 +50,61 @@
+                                     r"C:\DRE - Demonstrativo de Resultado"))
+ 
+ 
++VAR_PUSH = "DRE_BRIDGE_ALLOW_PUSH"
++LOG_GIT = Path(os.environ.get(
++    "DRE_BRIDGE_LOG_GIT", str(Path(__file__).resolve().parent / "git_publicacao.log")))
++
++
++def push_autorizado(ambiente=None):
++    """Push so com DRE_BRIDGE_ALLOW_PUSH=1 (exatamente "1"). Padrao: desligado."""
++    ambiente = os.environ if ambiente is None else ambiente
++    return (ambiente.get(VAR_PUSH) or "").strip() == "1"
++
++
++def registrar_git(mensagem):
++    """print + arquivo: a tarefa agendada roda com pythonw.exe, que nao tem
++    console -- sem o arquivo, o aviso de push pendente se perderia."""
++    print(mensagem)
++    try:
++        with open(LOG_GIT, "a", encoding="utf-8") as f:
++            f.write("%s  %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), mensagem))
++    except OSError:
++        pass
++
++
++def _repositorio_esta_publico():
++    """True/False/None (None = nao deu para saber -> tratar como inseguro).
++
++    TRAVA DE SEGURANCA (25/08/2026): DRE e dado financeiro confidencial. Se a
++    API publica do GitHub responde 200, qualquer um consegue ler o repositorio
++    -- um push ali exporia faturamento, custo e margem da empresa, e o
++    historico do git guardaria copia mesmo depois de apagar."""
++    try:
++        with urllib.request.urlopen(
++                "https://api.github.com/repos/tatiana-kelly/DRE", timeout=20) as r:
++            return r.status == 200
++    except urllib.error.HTTPError as e:
++        if e.code == 404:  # 404 = privado (ou inexistente) = seguro seguir
++            return False
++        registrar_git(f"[GIT] Nao consegui checar a visibilidade ({e.code}).")
++        return None
++    except Exception as e:
++        registrar_git(f"[GIT] Nao consegui checar a visibilidade ({str(e)[:60]}).")
++        return None
++
++
+ def publicar_no_git(arquivos=()):
+-    """Commita e publica no repositorio tatiana-kelly/DRE SOMENTE os DREs
+-    que esta execucao escreveu.
+-
+-
+-    TRAVA DE SEGURANCA (25/08/2026): DRE e dado financeiro confidencial. Antes
+-    de qualquer push, confere se o repositorio ainda esta PRIVADO consultando a
+-    API publica do GitHub — se ele responder 200, e porque qualquer um consegue
+-    ler, e o push e ABORTADO. Um repositorio publicado por engano exporia
+-    faturamento, custo e margem da empresa, e o historico do git guardaria
+-    copia mesmo depois de apagar."""
++    """Commita LOCALMENTE no repositorio da pasta de trabalho (remoto
++    tatiana-kelly/DRE) SOMENTE os DREs que esta execucao escreveu.
++
++    PUSH (19/09/2026): antes esta funcao fazia `git push` sozinha, todo dia,
++    sem ninguem aprovar. Regra da empresa: push exige aprovacao humana
++    explicita. Agora o padrao e so o commit local + registro de "push
++    pendente de aprovacao"; o push so roda com DRE_BRIDGE_ALLOW_PUSH=1 e,
++    mesmo assim, so depois da trava de visibilidade (repositorio privado)."""
+     import subprocess
+     if not (DEST_TRABALHO / ".git").exists():
+         return  # pasta ainda nao e repositorio: nada a publicar
+-
+-    try:
+-        with urllib.request.urlopen(
+-                "https://api.github.com/repos/tatiana-kelly/DRE", timeout=20) as r:
+-            if r.status == 200:
+-                print("\n[GIT] ABORTADO: o repositorio tatiana-kelly/DRE esta PUBLICO.")
+-                print("      DRE e confidencial — nao publico enquanto nao for privado.")
+-                print("      Settings > General > Danger Zone > Change visibility > Make private")
+-                return
+-    except urllib.error.HTTPError as e:
+-        if e.code != 404:  # 404 = privado (ou inexistente) = seguro seguir
+-            print(f"[GIT] Nao consegui checar a visibilidade ({e.code}) — nao publico por seguranca.")
+-            return
+-    except Exception as e:
+-        print(f"[GIT] Nao consegui checar a visibilidade ({str(e)[:60]}) — nao publico por seguranca.")
+-        return
+ 
+     def git(*args):
+         return subprocess.run(["git", *args], cwd=str(DEST_TRABALHO),
+@@ -93,7 +124,7 @@
+         except ValueError:
+             continue      # fora da pasta de trabalho: nao e nosso para publicar
+     if not relativos:
+-        print("[GIT] Nada novo para publicar.")
++        registrar_git("[GIT] Nada novo para commitar.")
+         return
+ 
+     git("add", "--", *relativos)
+@@ -103,18 +134,40 @@
+     n = len([l for l in git("diff", "--cached", "--name-only").stdout.splitlines()
+              if l.strip()])
+     if n == 0:
+-        print("[GIT] Os DREs baixados ja estavam publicados.")
++        registrar_git("[GIT] Os DREs baixados ja estavam commitados.")
+         return
+     hoje = time.strftime("%d/%m/%Y")
+     r = git("commit", "-m", f"DRE: sincronizacao automatica {hoje} ({n} arquivo(s))")
+     if r.returncode != 0 and "nothing to commit" not in (r.stdout + r.stderr):
+-        print(f"[GIT] Falha no commit: {(r.stderr or r.stdout)[:200]}")
++        registrar_git(f"[GIT] Falha no commit: {(r.stderr or r.stdout)[:200]}")
++        return
++
++    if not push_autorizado():
++        # Conta local (sem rede) dos commits que ainda nao foram ao remoto.
++        r = git("rev-list", "--count", "@{u}..HEAD")
++        fila = r.stdout.strip() if r.returncode == 0 else "?"
++        registrar_git(
++            f"[GIT] Commit LOCAL feito ({n} arquivo(s)). PUSH PENDENTE DE APROVACAO "
++            f"-- nada foi enviado ao GitHub. Commits aguardando push: {fila}. "
++            f"Para publicar, com aprovacao: git -C \"{DEST_TRABALHO}\" push "
++            f"(ou rodar uma vez com {VAR_PUSH}=1).")
++        return
++
++    publico = _repositorio_esta_publico()
++    if publico is None:
++        registrar_git("[GIT] Push NAO feito por seguranca (visibilidade desconhecida). "
++                      "Commit local mantido.")
++        return
++    if publico:
++        registrar_git("[GIT] Push ABORTADO: o repositorio tatiana-kelly/DRE esta PUBLICO. "
++                      "DRE e confidencial. Settings > General > Danger Zone > "
++                      "Change visibility > Make private. Commit local mantido.")
+         return
+     r = git("push", "origin", "HEAD")
+     if r.returncode == 0:
+-        print(f"[GIT] Publicado no GitHub ({n} arquivo(s)).")
++        registrar_git(f"[GIT] Publicado no GitHub ({n} arquivo(s)) com {VAR_PUSH}=1.")
+     else:
+-        print(f"[GIT] Commit feito, PUSH falhou: {(r.stderr or r.stdout)[:200]}")
++        registrar_git(f"[GIT] Commit feito, PUSH falhou: {(r.stderr or r.stdout)[:200]}")
+ 
+ 
+ def nome_limpo(storage_path):
