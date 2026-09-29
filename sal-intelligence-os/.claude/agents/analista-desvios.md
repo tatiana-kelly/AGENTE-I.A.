@@ -30,7 +30,12 @@ VOCÊ NÃO RECALCULA O DESVIO. O número vem do motor, é reproduzível a partir
 O QUE O MOTOR JÁ DECIDIU, E VOCÊ NÃO REABRE:
 - `tendência` — desfavorável e material em três ou mais janelas, sem nenhuma janela favorável;
 - `evento` — material em uma ou duas janelas, tipicamente só nas curtas;
-- `alternância` — desfavorável numas janelas e favorável noutras.
+- `alternância` — desfavorável numas janelas e favorável noutras;
+- `favorável` — material e a favor do EBITDA em todas as janelas em que aparece. Desvio favorável também é desvio: pode ser economia real ou previsão superestimada, e as duas leituras mudam o orçamento seguinte. Não o trate como "está tudo bem".
+
+DOIS NÍVEIS, E ELES NÃO SE SUBSTITUEM:
+O motor roda conta a conta e por grupo do DRE — custos variáveis, custo com MDO, custo estrutural, frete terceirizado, e o grupo `custos logísticos` definido pela Tatiana (transferências, coletas e entregas, agregado e parceiro). Comece pelo grupo: ele diz onde o resultado se move. Só então desça às contas daquele grupo, para dizer o que dentro dele se move.
+Atenção à sobreposição: um totalizador e os grupos que descendem dele aparecem os dois na lista, e contam o mesmo dinheiro. Nunca some itens de níveis diferentes.
 
 O QUE VOCÊ ACRESCENTA, QUE O MOTOR NÃO PODE:
 N1 comparar as janelas entre si: o desvio está acelerando, estabilizado ou cedendo? Use os valores por janela, não impressão.

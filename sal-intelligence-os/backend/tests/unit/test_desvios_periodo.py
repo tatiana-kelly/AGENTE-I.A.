@@ -173,3 +173,91 @@ def test_resumo_e_serializavel_e_traz_as_tres_partes():
 @pytest.mark.parametrize("tipo,tamanho", [("mes", 1), ("trimestre", 3), ("semestre", 6), ("ano", 12)])
 def test_tamanho_das_janelas(tipo, tamanho):
     assert dp.TAMANHO[tipo] == tamanho
+
+
+# ---------------------------------------------------------------------------
+# Grupos (pedido da Tatiana em 29/09/2026: "faca tbm por subconta")
+# ---------------------------------------------------------------------------
+
+def grupo(linha_id, rotulo, pai=None, nivel="GRUPO"):
+    return {"linha_id": linha_id, "rotulo": rotulo, "nivel": nivel, "pai": pai,
+            "classe": "", "sinal_ebitda": -1}
+
+
+def serie_com_hierarquia(realizado_transf, realizado_coleta, previsto=100000):
+    """Um grupo do cadastro (FRETE TERCEIRIZADO) com duas analiticas."""
+    matriz = [
+        grupo(35, "( - ) CUSTOS VARIÁVEIS", None, "TOTALIZADOR"),
+        grupo(36, "FRETE TERCEIRIZADO", 35),
+        dict(linha(40, "Transferência Agregado", realizado_transf, previsto), pai=36),
+        dict(linha(41, "Coleta Agregado", realizado_coleta, previsto), pai=36),
+    ]
+    return {"2026-08": {"competencia": "2026-08", "matriz": matriz}}
+
+
+def test_grupo_soma_as_analiticas_que_descendem_dele():
+    serie = serie_com_hierarquia(130000, 125000)
+    janela = dp.janelas_de("2026-08", list(serie))[0]
+    por_rotulo = {d.rotulo: d for d in dp.desvios_por_grupo(serie, janela, "FLEXIBILIZADO")}
+
+    # 30.000 + 25.000 de estouro, os dois desfavoraveis
+    assert por_rotulo["FRETE TERCEIRIZADO"].impacto == Decimal("-55000.00")
+    assert por_rotulo["( - ) CUSTOS VARIÁVEIS"].impacto == Decimal("-55000.00"), "totalizador soma o mesmo"
+    assert por_rotulo["FRETE TERCEIRIZADO"].classe == "GRUPO"
+
+
+def test_impacto_do_grupo_e_a_soma_dos_impactos_e_nao_a_diferenca_dos_totais():
+    """Dentro de um grupo convivem contas de sinais opostos. Somar os totais antes
+    de aplicar o sinal apagaria uma contra a outra."""
+    matriz = [
+        grupo(26, "PERDAS COM AVARIAS E EXTRAVIOS", None, "TOTALIZADOR"),
+        dict(linha(27, "Extravio", 150000, 100000, sinal=-1), pai=26),
+        dict(linha(28, "Recuperação de Extravio", 150000, 100000, sinal=1), pai=26),
+    ]
+    serie = {"2026-08": {"competencia": "2026-08", "matriz": matriz}}
+    janela = dp.janelas_de("2026-08", list(serie))[0]
+
+    # -50.000 do extravio e +50.000 da recuperacao: o grupo fica em zero e some
+    # da lista. Se fosse diferenca de totais, tambem daria zero -- mas por acaso.
+    assert dp.desvios_por_grupo(serie, janela, "FLEXIBILIZADO") == []
+
+    matriz[2]["REALIZADO"] = "120000"  # recuperacao menor: o grupo piora
+    assert dp.desvios_por_grupo(serie, janela, "FLEXIBILIZADO")[0].impacto == Decimal("-30000.00")
+
+
+def test_grupo_derivado_da_tatiana_e_so_o_que_ela_listou():
+    """`custos logisticos` nao e FRETE TERCEIRIZADO: fora Ajudantes PJ e Descargas,
+    que ela nao citou -- e Descargas e hoje a maior tendencia da serie."""
+    assert "Descargas" not in dp.GRUPOS_DERIVADOS["CUSTOS LOGISTICOS"]
+    assert "Ajudantes PJ" not in dp.GRUPOS_DERIVADOS["CUSTOS LOGISTICOS"]
+    assert "Transferência Agregado" in dp.GRUPOS_DERIVADOS["CUSTOS LOGISTICOS"]
+    assert "Entrega Parceiro" in dp.GRUPOS_DERIVADOS["CUSTOS LOGISTICOS"]
+
+
+def test_folha_entra_no_grupo_e_continua_fora_conta_a_conta():
+    """No agregado de `CUSTO COM MDO` nao ha pessoa a expor; conta a conta, ha."""
+    matriz = [
+        grupo(71, "CUSTO COM MDO", None, "TOTALIZADOR"),
+        dict(linha(72, "Salário", 900000, 800000), pai=71),
+    ]
+    serie = {"2026-08": {"competencia": "2026-08", "matriz": matriz}}
+    janela = dp.janelas_de("2026-08", list(serie))[0]
+
+    assert dp.desvios_da_janela(serie, janela, "FLEXIBILIZADO") == [], "conta a conta: folha fora"
+    grupos = dp.desvios_por_grupo(serie, janela, "FLEXIBILIZADO")
+    assert [d.rotulo for d in grupos] == ["CUSTO COM MDO"]
+    assert grupos[0].impacto == Decimal("-100000.00")
+
+
+def test_grupo_so_favoravel_aparece_como_favoravel_em_vez_de_sumir():
+    """`CUSTO COM MDO` veio R$ 1,17 milhao abaixo do previsto no ano real. Pode ser
+    economia ou previsao errada, e as duas leituras importam."""
+    matriz = [grupo(71, "CUSTO COM MDO", None, "TOTALIZADOR"),
+              dict(linha(72, "Salário", 700000, 800000), pai=71)]
+    serie = {f"2026-{i:02d}": {"competencia": f"2026-{i:02d}", "matriz": matriz} for i in range(1, 9)}
+    macro = dp.desvios_macro(serie, "2026-08", por_grupo=True)
+
+    mdo = next(d for d in macro if d.rotulo == "CUSTO COM MDO")
+    assert mdo.veredito == dp.FAVORAVEL
+    assert mdo.impacto_maior_janela > 0
+    assert "previsão superestimada" in mdo.observacao

@@ -39,6 +39,8 @@ def main(argv=None) -> int:
     p.add_argument("--base", default="FLEXIBILIZADO", choices=dp.BASES)
     p.add_argument("--materialidade", type=str, default=str(dp.MATERIALIDADE_PADRAO),
                    help="piso por mes da janela, em reais")
+    p.add_argument("--grupo", action="store_true",
+                   help="agrega por grupo do DRE (custos variaveis, MDO, estrutural, logisticos)")
     p.add_argument("--json", action="store_true", help="imprime o pacote do motor e sai")
     args = p.parse_args(argv)
 
@@ -55,7 +57,7 @@ def main(argv=None) -> int:
 
     from decimal import Decimal
     competencia = args.ate or max(serie)
-    pacote = dp.resumo(serie, competencia, args.base, Decimal(args.materialidade))
+    pacote = dp.resumo(serie, competencia, args.base, Decimal(args.materialidade), args.grupo)
 
     if args.json:
         print(json.dumps(pacote, ensure_ascii=False, indent=1))
@@ -69,7 +71,7 @@ def main(argv=None) -> int:
         print(f'  {janela["tipo"]:<10} {len(janela["competencias"]):2d} meses{marca}')
 
     print()
-    print(f'desvios macro: {len(pacote["macro"])}')
+    print(f'desvios macro por {pacote["nivel"]}: {len(pacote["macro"])}')
     for item in pacote["macro"]:
         print(f'  {item["rotulo"][:36]:<36} {item["veredito"]:<12} '
               f'{item["persistencia"]}/{item["janelas_avaliadas"]} janelas  '
