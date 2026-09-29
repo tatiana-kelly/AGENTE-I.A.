@@ -1,9 +1,12 @@
-"""Roda o ciclo de desvios macro do DRE: motor -> analista-desvios -> decisor.
+r"""Roda o ciclo de desvios macro do DRE: motor -> analista-desvios -> decisor.
 
-Uso:
-    cd backend && python -m scripts.run_desvios_macro
-    cd backend && python -m scripts.run_desvios_macro --ate 2026-08 --base ORCADO
-    cd backend && python -m scripts.run_desvios_macro --json      # so o pacote do motor
+Uso, no Windows PowerShell (`&&` nao existe no PowerShell 5.1; use `;`), com o
+Python do venv do proprio backend -- o Python global nao tem as dependencias:
+
+    cd "C:\Users\tatiana.silva\AGENTE-I.A\sal-intelligence-os\backend"
+    .\.venv\Scripts\python.exe -m scripts.run_desvios_macro
+    .\.venv\Scripts\python.exe -m scripts.run_desvios_macro --ate 2026-08 --base ORCADO
+    .\.venv\Scripts\python.exe -m scripts.run_desvios_macro --json   # so o pacote
 
 O motor (`app/services/desvios_periodo.py`) le os payloads publicados do DRE e
 entrega o mesmo numero que qualquer pessoa reproduz. Sem ANTHROPIC_API_KEY o
